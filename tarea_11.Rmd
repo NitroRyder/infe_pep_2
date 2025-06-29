@@ -1,0 +1,494 @@
+---
+title: "Untitled"
+author: "EJEMPLO"
+date: "2025-06-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library (caret)
+library (dplyr)
+library (ggpubr)
+library (pROC)
+library (leaps)
+library(car)
+```
+
+
+# 1) Definir la semilla a utilizar, que corresponde a los primeros cinco dígitos del RUN del integrante de mayor edad del equipo.
+
+```{r}
+set.seed(21063)
+```
+
+# 2) Seleccionar una muestra de 100 personas, asegurando que la mitad tenga estado nutricional “sobrepeso” y la otra mitad “no sobrepeso”.
+
+```{r}
+datos <- read.csv2("EP09 Datos.csv")
+
+ICM <- datos$Weight / ((datos$Height * 0.01)^2)
+datos_con_ICM <- cbind(datos, ICM)
+
+datos_categorizados <- datos_con_ICM |> 
+  mutate(EN = factor(ifelse(ICM >= 23.2, "sobrepeso", "no sobrepeso"), 
+                     levels = c("no sobrepeso", "sobrepeso")))
+```
+
+
+```{r}
+mitad_sobrepeso <- datos_categorizados |> filter(ICM >= 23.2) |> sample_n(50)
+mitad_no_sobrepeso <- datos_categorizados |> filter(ICM < 23.2) |> sample_n(50)
+
+muestra <- rbind(mitad_sobrepeso, mitad_no_sobrepeso)
+```
+
+# 3) Usando las herramientas del paquete leaps, realizar una búsqueda exhaustiva para seleccionar entre dos y ocho predictores que ayuden a estimar la variable Peso (Weight), obviamente sin considerar las nuevas variables IMC ni EN, y luego utilizar las funciones del paquete caret para construir un modelo de regresión lineal múltiple con los predictores escogidos y evaluarlo usando bootstrapping.
+
+## A) Seleccionar las variables a usar 
+
+```{r}
+nombres_a_usar <- colnames(muestra)[!colnames(muestra) %in% c("ICM", "EN", "Gender", "Age")]
+nombres_a_usar
+
+datos_a_usar <- muestra[, nombres_a_usar]
+```
+
+## B) Realizar la búsqueda exhaustiva de los mejores predictores [BIC Y R2 AJUSTADO] -> VOY A USAR BIC
+
+```{r}
+library (dplyr)
+library (leaps)
+
+# Evaluar todos las combinaciones
+combinaciones <- regsubsets (Weight ~ ., data = datos_a_usar,
+                             nbest = 1, nvmax = 16, method = "exhaustive")
+
+# Graficar los resultados
+plot (combinaciones)
+
+# Extraer los mejores subconjuntos
+resumen_combinaciones <- summary (combinaciones)
+i_bic_minimo <- which.min (resumen_combinaciones [["bic"]])
+i_r2a_maximo <- which.max (resumen_combinaciones [["adjr2"]])
+
+mejor_comb_bic <- resumen_combinaciones [["which"]] [i_bic_minimo, ]
+mejor_comb_r2a <- resumen_combinaciones [["which"]] [i_r2a_maximo, ]
+
+# Extraer las variables seleccionadas
+comb_mejor_bic <- names (mejor_comb_bic [mejor_comb_bic == TRUE])
+comb_mejor_r2a <- names (mejor_comb_r2a [mejor_comb_r2a == TRUE])
+
+# Eliminar variables indicadoras
+nombres_mejor_bic <- unique(gsub("^(.*)\\d$", "\\1", comb_mejor_bic))
+nombres_mejor_r2a <- unique(gsub("^(.*)\\d$", "\\1", comb_mejor_r2a))
+
+# Obtener las fórmulas
+pred_mejor_bic <- paste(nombres_mejor_bic[-1], collapse = " + ")
+pred_mejor_r2a <- paste(nombres_mejor_r2a[-1], collapse = " + ")
+
+fmla_mejor_bic <- as.formula(paste("Weight", pred_mejor_bic, sep = " ~ "))
+fmla_mejor_r2a <- as.formula(paste("Weight", pred_mejor_r2a, sep = " ~ "))
+
+# Construir y mostrar los mejores modelos
+modelo_mejor_bic <- lm(fmla_mejor_bic, data = datos_a_usar)
+modelo_mejor_r2a <- lm(fmla_mejor_r2a, data = datos_a_usar)
+
+cat ("Modelo que minimiza el BIC:\n")
+cat ("---------------------------\n")
+print(modelo_mejor_bic)
+cat ("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+cat ("\nModelo que maximiza el coeficiente de determinación ajustado: \n")
+cat ("----------------------------------------------------------------\n")
+print(modelo_mejor_r2a) 
+```
+
+## C) Evaluar los modelos usando bootstrapping
+
+```{r}
+library(caret)
+
+modelo_final <- train(fmla_mejor_bic,
+                      data = datos_a_usar,
+                      method = "lm",
+                      trControl = trainControl(method = "boot", number = 500))
+cat("\nModelo final (BIC):\n")
+cat("--------------------------------------------------\n")
+summary(modelo_final)
+cat("--------------------------------------------------\n")
+print(modelo_final)
+```
+
+## D) PREDICTORES OBTENIDOS:
+- Elbows.diameter
+- Chest.Girth
+- Waist.Girth
+- Thigh. Girth
+- Calf.Maximum.Girth
+- Height
+
+# 4) Haciendo un poco de investigación sobre el paquete caret, en particular cómo hacer Recursive Feature Elimination (RFE), construir un modelo de regresión lineal múltiple para predecir la variable IMC que incluya entre 10 y 20 predictores, seleccionando el conjunto de variables que maximice R2 y que use cinco repeticiones de validación cruzada de cinco pliegues para evitar el sobreajuste (obviamente no se debe considerar las variables Peso, Estatura ni estado nutricional –Weight, Height, EN respectivamente).
+
+## A) Seleccionar las variables a usar 
+
+```{r}
+nombres_a_usar2 <- colnames(muestra)[!colnames(muestra) %in% c("Weight", "Height","EN", "Gender", "Age")]
+nombres_a_usar2
+
+datos_a_usar2 <- muestra[, nombres_a_usar2]
+```
+
+## B) Realizar RFE para seleccionar los mejores predictores
+
+RESPETA LO PEDIDO: 
+- 10 y 20 predictores
+- Seleccionando el conjunto de variables que maximice R2 
+- Usa 5 repeticiones de validación cruzada de 5 pliegues para evitar el sobreajuste
+
+```{r}
+x <- datos_a_usar2 |> select(-ICM)  # Excluir la variable objetivo ICM
+#-------------------------------------------------------------------------------
+control <- rfeControl(functions = lmFuncs,       # funciones para RLM
+                      method = "repeatedcv",     # validación cruzada repetida
+                      number = 5,                # 5 pliegues
+                      repeats = 5,               # 5 repeticiones
+                      verbose = FALSE)
+
+modelo_rfe <- rfe(x,
+                  datos_a_usar2$ICM,
+                  sizes = 10:20,
+                  rfeControl = control)
+#-------------------------------------------------------------------------------
+# Mostrar resumen del modelo
+print(modelo_rfe)
+
+# Predictores seleccionados
+cat("\nPredictores seleccionados:\n")
+print(predictors(modelo_rfe))
+
+# Gráfico de rendimiento por número de predictores
+plot(modelo_rfe, type = c("g", "o"))
+#-------------------------------------------------------------------------------
+modelo_final2 <- train(x = x[, predictors(modelo_rfe)],
+                      y = datos_a_usar2$ICM,
+                      method = "lm",
+                      trControl = trainControl(method = "cv", number = 10))
+
+summary(modelo_final2)
+```
+
+## C) PREDICTORES A TOMAR:
+
+- Wrist.Minimum.Girth
+- Calf.Maximum.Girth
+- Knees. diameter
+- Knee.Girth
+- Ankles.diameter
+- Biiliac.diameter
+- Bitrochanteric.diameter
+- Elbows.diameter
+- Waist.Girth
+- Thigh. Girth
+- Wrists.diameter
+- Ankle.Minimum.Girth
+
+
+# 5) Usando RFE, construir un modelo de regresión logística múltiple para la variable EN que incluya el conjunto de predictores, entre dos y seis, que entregue la mejor curva ROC y que utilice validación cruzada dejando uno fuera para evitar el sobreajuste (obviamente no se debe considerar las variables Peso, Estatura –Weight y Height respectivamente– ni IMC).
+
+## A) Seleccionar las variables a usar 
+
+```{r}
+nombres_a_usar3 <- colnames(muestra)[!colnames(muestra) %in% c("ICM" ,"Weight", "Height", "Gender", "Age")]
+nombres_a_usar3
+
+datos_a_usar3 <- muestra[, nombres_a_usar3]
+# Mezclar filas aleatoriamente del data frame
+datos_a_usar3 <- datos_a_usar3[sample(nrow(datos_a_usar3)), ]
+```
+
+## B) Realizar RFE para seleccionar los mejores predictores
+
+```{r}
+x2 <- datos_a_usar3 |> select(-EN)  # Excluir la variable objetivo EN
+#-------------------------------------------------------------------------------
+control2 <- rfeControl(functions = lrFuncs, # funciones para RLM
+                      method = "LOOCV",     # validación cruzada dejando un fuera
+                      verbose = FALSE)
+
+train2 <- trainControl(method = "none", 
+                      classProbs = TRUE, 
+                      summaryFunction = twoClassSummary)
+
+modelo_rfe2 <- suppressWarnings(rfe(x2,
+                  datos_a_usar3$EN,
+                  sizes = 2:6,
+                  rfeControl = control2,
+                  trainControl = train2,
+                  metric = "ROC"))  # maximizar ROC
+#-------------------------------------------------------------------------------
+# Mostrar resumen del modelo
+summary(modelo_rfe2$fit)
+
+# Predictores seleccionados
+cat("\nPredictores seleccionados:\n")
+print(predictors(modelo_rfe2))
+
+# Gráfico de rendimiento por número de predictores
+plot(modelo_rfe2, type = c("g", "o"))
+```
+
+## C) CURVA DE ROC
+
+```{r}
+# Evaluar el modelo con el conjunto de prueba.
+
+# Obtener probabilidades para la clase positiva ("no sobrepeso")
+probs_pru <- predict(modelo_rfe2, datos_a_usar3, type = "prob")[["no sobrepeso"]]
+
+# Curva ROC
+ROC_pru <- roc(response = datos_a_usar3[["EN"]], predictor = probs_pru,
+               levels = c("sobrepeso", "no sobrepeso"), direction = "<")
+g_ROC_pru <- ggroc(ROC_pru, color = "steelblue") +
+  geom_abline(intercept = 1, slope = 1, colour = "steelblue1", linetype = "dashed") +
+  xlab("Especificidad") + ylab("Sensibilidad") +
+  annotate("text", x = 0.3, y = 0.3, label = sprintf("AUC = %.2f", ROC_pru[["auc"]])) +
+  theme_pubr()
+print(g_ROC_pru)
+
+# Clasificación binaria (umbral 0.5)
+umbral <- 0.5
+preds_pru <- ifelse(probs_pru >= umbral, "no sobrepeso", "sobrepeso")
+preds_pru <- factor(preds_pru, levels = c("sobrepeso", "no sobrepeso"))
+
+# Matriz de confusión
+mat_conf_pru <- confusionMatrix(preds_pru, datos_a_usar3[["EN"]], positive = "no sobrepeso")
+
+# Resultados
+cat("\n\nEvaluación del modelo (cjto. de prueba):\n")
+cat("------------------------------------------------------------\n")
+print(mat_conf_pru[["table"]])
+cat("\n")
+cat(sprintf("    Exactitud: %.3f\n", mat_conf_pru[["overall"]]["Accuracy"]))
+cat(sprintf(" Sensibilidad: %.3f\n", mat_conf_pru[["byClass"]]["Sensitivity"]))
+cat(sprintf("Especificidad: %.3f\n", mat_conf_pru[["byClass"]]["Specificity"]))
+```
+
+## D) PREDICTORES A TOMAR:
+- Chest.diameter
+- Waist.Girth
+- Biiliac.diameter
+- Hip. Girth
+- Calf.Maximum.Girth
+
+# 6) Pronunciarse sobre la confiabilidad y el poder predictivo de los modelos obtenidos.
+
+## A) MODELO DE REGRESIÓN LINEAL MÚLTIPLE PARA Weight (SE USA MODELO modelo_mejor_bic)
+
+### 1. La variable de respuesta debe ser cuantitativa y continua, sin restricciones para su variabilidad.
+
+```{r}
+str(datos_a_usar$Weight)
+```
+
+### 2. Los predictores deben ser cuantitativos o dicotómicos (de ahí la necesidad de variables indicadoras para manejar más de dos niveles).
+
+```{r}
+str(datos_a_usar[, c("Elbows.diameter", "Chest.Girth", "Waist.Girth" ,"Thigh.Girth" ,"Calf.Maximum.Girth" ,"Height")])
+```
+
+### 3. Los predictores deben tener algún grado de variabilidad (su varianza no debe ser igual a cero). En otras palabras, no pueden ser constantes.
+
+```{r}
+apply(datos_a_usar[, c("Elbows.diameter", "Chest.Girth", "Waist.Girth" ,"Thigh.Girth" ,"Calf.Maximum.Girth" ,"Height")], 2, var)
+```
+
+### 4. Cada predictor debe estar relacionado linealmente con la respuesta. 
+
+```{r}
+library(car)
+modelo_final11 <- lm(Weight ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height, data = datos_a_usar)
+# Gráfico de residuos
+residualPlots(modelo_final11,
+              terms = ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+              col = "steelblue", pch = 19, col.quad = "red")
+
+# GRAFICO MARGINALES:
+marginalModelPlots(modelo_final11, sd = TRUE, 
+                   terms = ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height,
+                   id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+                   col = "steelblue", pch = 20, col.line = c("blue", "red"))
+```
+
+
+### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
+
+
+### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
+
+```{r}
+ncvTest(modelo_final11)
+```
+
+### 7. Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_final11)
+```
+
+### 8. No debe existir multicolinealidad. Esto significa que no deben darse relaciones lineales fuertes (co-eficientes de correlación altos) entre dos o más predictores.
+
+```{r}
+vif(modelo_final11)
+```
+
+### 9. Las estimaciones de los coeficientes del modelo no debe estar alterados por unos pocas observaciones
+influyentes.
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot ( modelo_final11 , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+
+
+## B) MODELO DE REGRESIÓN LINEAL MÚLTIPLE PARA ICM
+
+### 1. La variable de respuesta debe ser cuantitativa y continua, sin restricciones para su variabilidad.
+
+```{r}
+str(datos_a_usar2$ICM)
+```
+
+### 2. Los predictores deben ser cuantitativos o dicotómicos (de ahí la necesidad de variables indicadoras para manejar más de dos niveles).
+
+```{r}
+str(datos_a_usar2[, c("Wrist.Minimum.Girth", "Calf.Maximum.Girth" ,"Knees.diameter" ,"Knee.Girth" ,"Ankles.diameter" ,"Biiliac.diameter" ,"Bitrochanteric.diameter" ,"Elbows.diameter" ,"Waist.Girth" ,"Thigh.Girth" ,"Wrists.diameter" ,"Ankle.Minimum.Girth")])
+```
+
+### 3. Los predictores deben tener algún grado de variabilidad (su varianza no debe ser igual a cero). En otras palabras, no pueden ser constantes.
+
+```{r}
+apply(datos_a_usar2[, c("Wrist.Minimum.Girth", "Calf.Maximum.Girth" ,"Knees.diameter" ,"Knee.Girth" ,"Ankles.diameter" ,"Biiliac.diameter" ,"Bitrochanteric.diameter" ,"Elbows.diameter" ,"Waist.Girth" ,"Thigh.Girth" ,"Wrists.diameter" ,"Ankle.Minimum.Girth")], 2, var)
+```
+
+### 4. Cada predictor debe estar relacionado linealmente con la respuesta. 
+
+```{r}
+library(car)
+modelo_final22 <- lm(ICM ~ Wrist.Minimum.Girth + Calf.Maximum.Girth + Knees.diameter + Knee.Girth + Ankles.diameter + Biiliac.diameter + Bitrochanteric.diameter + Elbows.diameter + Waist.Girth + Thigh.Girth + Wrists.diameter + Ankle.Minimum.Girth, data = datos_a_usar2)
+
+# Gráfico de residuos
+residualPlots(modelo_final22,
+              terms = ~ Wrist.Minimum.Girth + Calf.Maximum.Girth + Knees.diameter + Knee.Girth + Ankles.diameter + Biiliac.diameter + Bitrochanteric.diameter + Elbows.diameter + Waist.Girth + Thigh.Girth + Wrists.diameter + Ankle.Minimum.Girth,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+              col = "steelblue", pch = 19, col.quad = "red")
+
+# GRAFICO MARGINALES:
+marginalModelPlots(modelo_final22, sd = TRUE, 
+                   terms = ~ Wrist.Minimum.Girth + Calf.Maximum.Girth + Knees.diameter + Knee.Girth + Ankles.diameter + Biiliac.diameter + Bitrochanteric.diameter + Elbows.diameter + Waist.Girth + Thigh.Girth + Wrists.diameter + Ankle.Minimum.Girth,
+                   id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+                   col = "steelblue", pch = 20, col.line = c("blue", "red"))
+```
+
+
+### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
+
+
+### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
+
+```{r}
+ncvTest(modelo_final22)
+```
+
+### 7. Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_final22)
+```
+
+### 8. No debe existir multicolinealidad. Esto significa que no deben darse relaciones lineales fuertes (co-eficientes de correlación altos) entre dos o más predictores.
+
+```{r}
+vif(modelo_final22)
+```
+
+### 9. Las estimaciones de los coeficientes del modelo no debe estar alterados por unos pocas observaciones
+influyentes.
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot ( modelo_final22 , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+
+## C) MODELO DE REGRESIÓN LOGÍSTICA MÚLTIPLE PARA EN
+
+### 1. Debe existir una relación lineal entre los predictores y la respuesta transformada.
+
+```{r}
+library(car)
+
+modelo_final33 <- glm(EN ~ Chest.diameter + Waist.Girth + Biiliac.diameter + Hip.Girth + Calf.Maximum.Girth, 
+                       family = binomial (link = "logit"),
+                       data = datos_a_usar3)
+
+# Gráfico de residuos
+residualPlots(modelo_final33,
+              terms = ~ Chest.diameter + Waist.Girth + Biiliac.diameter + Hip.Girth + Calf.Maximum.Girth,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+              col = "steelblue", pch = 19, col.quad = "red")
+
+# GRAFICO MARGINALES:
+marginalModelPlots(modelo_final33, sd = TRUE, 
+                   terms = ~ Chest.diameter + Waist.Girth + Biiliac.diameter + Hip.Girth + Calf.Maximum.Girth,
+                   id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+                   col = "steelblue", pch = 20, col.line = c("blue", "red"))
+```
+
+### 2. Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_final33)
+```
+
+### 3. Multicolinealidad entre los predictores, que en este caso se evalúa y aborda del mismo modo que para RLM.
+
+```{r}
+vif(modelo_final33)
+```
+
+### 4) Información incompleta, que se produce cuando no contamos con observaciones suficientes para todas las posibles combinaciones de predictores, en especial para algún nivel de una variable categórica.
+
+```{r}
+# CANTIDAD DE OBSERVACIONES EN EL MODELO
+n_obs <- nrow(datos_a_usar3)
+cat("Cantidad de observaciones en el modelo:", n_obs, "\n")
+
+# VERICAR QUE TODO VALOR NO SEA N/A
+cat("Cantidad de valores NA en el modelo:", sum(is.na(datos_a_usar3)), "\n")
+
+# Verificar la cantidad de valores únicos por cada predictor numérico
+
+datos_a_usar3 |> group_by(EN) |>
+  summarise(Chest_diameter_unique = n_distinct(Chest.diameter),
+            Waist_Girth_unique = n_distinct(Waist.Girth),
+            Biiliac_diameter_unique = n_distinct(Biiliac.diameter),
+            Hip_Girth_unique = n_distinct(Hip.Girth),
+            Calf_Maximum_Girth_unique = n_distinct(Calf.Maximum.Girth))
+```
+
+### 5) Separación perfecta, que ocurre cuando no hay superposición entre las clases
+
+#### OJO: RESPUESTA ANALIZANDO LOS GRAFICOS DE RECIDUOS!!
+
+### 6) Las estimaciones de los coeficientes del modelo no están dominadas por casos influyentes.
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot (modelo_final33 , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+

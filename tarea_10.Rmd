@@ -1,0 +1,444 @@
+---
+title: "Untitled"
+author: "EJEMPLO"
+date: "2025-06-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library (caret)
+library (dplyr)
+library (ggpubr)
+library (pROC)
+library (leaps)
+library(car)
+```
+
+
+# 0) LECTURA DE ARCHIVO Y SELECCIÓN DE DATOS:
+
+```{r}
+datos <- read.csv2("EP09 Datos.csv")
+```
+
+## Actividades
+
+### El equipo crea la variable IMC (índice de masa corporal) como el peso de una persona (en kilogramos) dividida por el cuadrado de su estatura (en metros).
+
+```{r}
+set.seed(3959)
+ICM <- datos$Weight / ((datos$Height * 0.01)^2)
+datos_con_ICM <- cbind(datos, ICM)
+```
+
+### Si bien esta variable se usa para clasificar a las personas en varias clases de estado nutricional (bajo peso, normal, sobrepeso, obesidad, obesidad mórbida), para efectos de este ejercicio, usaremos dos clases: sobrepeso (IMC ≥ 23,2) y no sobrepeso (IMC < 23,2). (VARIABLE DICOTOMICA)
+
+```{r}
+datos_categorizados <- datos_con_ICM |> 
+  mutate(EN = factor(ifelse(ICM >= 23.2, "sobrepeso", "no sobrepeso"), 
+                     levels = c("no sobrepeso", "sobrepeso")))
+```
+
+# 1) Asegurando reproducibilidad, seleccionar una muestra de 150 mujeres (si su n° de equipo es un número par) o 150 hombres (si su n° de equipo es impar), asegurando que la mitad tenga estado nutricional “sobrepeso” y la otra mitad “no sobrepeso” en cada caso. Dividir esta muestra en dos conjuntos: los datos de 100 personas (50 con EN “sobrepeso”) para utilizar en la construcción de los modelos y 50 personas (25 con EN “sobrepeso”) para poder evaluarlos.
+
+```{r}
+mujeres_sobre <- datos_categorizados |> filter(Gender == 0 & ICM >= 23.2) |> sample_n(75, replace = FALSE)
+
+mujeres_no_so <- datos_categorizados |> filter(Gender == 0 & ICM < 23.2) |> sample_n(75, replace = FALSE)
+#--------------------------------------------------------------------------------------------------------------------
+# PARA CONSTRUCCUÓN DE LOS MODELOS:
+muestra_so <- mujeres_sobre |> slice_head(n = 50)
+muestra_no <- mujeres_no_so |> slice_head(n = 50)
+
+datos_entrenamiento <- bind_rows(muestra_so, muestra_no) |> sample_frac(1L) 
+datos_entrenamiento$EN <- factor(datos_entrenamiento$EN, levels = c("no sobrepeso", "sobrepeso"))
+#--------------------------------------------------------------------------------------------------------------------
+# PARA EVALUACIÓN DE LOS MODELOS:
+muestra_so_2 <- mujeres_sobre |> slice_tail(n = 25)
+muestra_no_2 <- mujeres_no_so |> slice_tail(n = 25)
+
+datos_pueba <- bind_rows(muestra_so_2, muestra_no_2) |> sample_frac(1L) 
+datos_pueba$EN <- factor(datos_pueba$EN, levels = c("no sobrepeso", "sobrepeso"))
+#--------------------------------------------------------------------------------------------------------------------
+```
+
+
+# 2) Recordar las ocho posibles variables predictoras seleccionadas de forma aleatoria en el ejercicio anterior.
+
+```{r}
+variables_seleccionadas <- c("Ankles.diameter", "Wrist.Minimum.Girth", "Thigh.Girth", 
+                              "Biacromial.diameter", "Bitrochanteric.diameter", 
+                              "Navel.Girth", "Ankle.Minimum.Girth", "Wrists.diameter")
+
+variables_seleccionadas
+```
+
+# 3) Seleccionar, de las otras variables, una que el equipo considere que podría ser útil para predecir la clase EN, justificando bien esta selección (idealmente con literatura).
+
+```{r}
+variables_no_seleccionadas <- colnames(datos_pueba |> select(-Height ,-Gender , -ICM ,-EN, -Weight,-all_of(variables_seleccionadas)))
+variables_no_seleccionadas
+cat("\n-----------------------------------------------------------------------------------------------\n")
+variables_seleccionadas <- c(variables_seleccionadas, "Hip.Girth")
+variables_seleccionadas
+```
+
+# 4) Usando el entorno R, construir un modelo de regresión logística con el predictor seleccionado en el paso anterior y utilizando de la muestra obtenida.
+
+## A) Ejemplo de la construcción de un modelo de regresión logística:
+
+```{r}
+modelo_rlog_1 <- glm(EN ~ Hip.Girth, family = binomial(link = "logit"), data = datos_entrenamiento)
+cat("\n-----------------------------------------------------------------------------------------------\n")
+print (summary (modelo_rlog_1), signif.stars = FALSE)
+cat("\n-----------------------------------------------------------------------------------------------\n")
+print (anova (modelo_rlog_1, test = "LRT"), signif.stars = FALSE)
+```
+
+# 5) Usando estas herramientas para la exploración de modelos del entorno R, buscar entre dos y cinco predictores de entre las variables seleccionadas al azar, recordadas en el punto 2, para agregar al modelo obtenido en el paso 4. 
+Para esto, si:
+
+## - si su n° de equipo es 1 o 2: utilice selección hacia adelante, sin usar la función step().
+
+```{r}
+# Imprimir mensajes de advertencia a medida que ocurren, más cortos
+opt <- options(warn = 1, with = 26)
+datos_ent_seleccionados <- datos_entrenamiento |> select(EN, all_of(variables_seleccionadas), - Hip.Girth)
+nulo <- glm(EN ~ 1, family = binomial(link = "logit"), data = datos_ent_seleccionados)
+maxi <- glm(EN ~ ., family = binomial(link = "logit"), data = datos_ent_seleccionados)
+#---------------------------------------------------------------------------------------
+# Revisar un paso hacia adelante
+cat("\nPaso 1:\n ------\n")
+print (add1(nulo, scope = maxi))
+
+# Actualizar el modelo
+modelo1 <- update(nulo, . ~ . + Thigh.Girth )
+#------------------------------------
+# Revisar un paso hacia adelante
+cat ("\nPaso 2:\n ------\n")
+print (add1(modelo1, scope = maxi))
+
+# Actualizar el modelo
+modelo2 <- update(modelo1, . ~ . + Navel.Girth)
+#-------------------------------------
+# Revisar un paso hacia adelante
+cat ("\nPaso 3:\n ------\n")
+print (add1(modelo2, scope = maxi))
+
+# Actualizar el modelo
+modelo3 <- update(modelo2, . ~ . + Wrist.Minimum.Girth)
+#-------------------------------------
+# Revisar un paso hacia adelante
+cat ("\nPaso 4:\n ------\n")
+print (add1(modelo3, scope = maxi))
+
+# Actualizar el modelo
+modelo4 <- update(modelo3, . ~ . + Ankle.Minimum.Girth)
+#---------------------------------------------------------------------------------------
+cat ("\nPaso 5:\n ------\n")
+print (add1(modelo4, scope = maxi))
+
+# Actualizar el modelo
+modelo5 <- update(modelo4, . ~ . + Ankles.diameter)
+#---------------------------------------------------------------------------------------
+# Mostrar el modelo obtenido
+modelo6_str <- capture.output(print (summary (modelo5)))
+cat ("\nModelo RLog conseguido con regresión hacia adelante:\n")
+cat ("------------------------------------------------------\n")
+write.table (modelo6_str [6:10], quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+# Comparar los modelos generados
+cat ("\nComparación de los modelos considerados:\n")
+cat ("------------------------------------------\n")
+print (anova(nulo, modelo1, modelo2, modelo3, modelo4, modelo5, test = "LRT"))
+```
+
+## - si su n° de equipo es 3 o 4: utilice eliminación hacia atrás, sin usar la función step().
+
+```{r}
+nulo <- glm(EN ~ 1, family = binomial(link = "logit"), data = datos_ent_seleccionados)
+maxi <- glm(EN ~ ., family = binomial(link = "logit"), data = datos_ent_seleccionados)
+#---------------------------------------------------------------------------------------
+# Revisar un paso hacia atrás
+cat("\nPaso 1:\n ------\n")
+print(drop1(maxi, scope = maxi))
+
+# Actualizar el modelo
+modelo1 <- update(maxi, . ~ . - Navel.Girth) #(VOY ELIMINANDO EL CON MAYOR AIC)
+#------------------------------------
+# Revisar un paso hacia atrás
+cat ("\nPaso 2:\n ------\n")
+print(drop1(modelo1, scope = formula(modelo1)))
+
+# Actualizar el modelo
+modelo2 <- update(modelo1, . ~ . - Thigh.Girth) #(VOY ELIMINANDO EL CON MAYOR AIC)
+#--------------------------------------
+# Revisar un paso hacia atrás
+cat ("\nPaso 3:\n ------\n")
+print(drop1(modelo2, scope = formula(modelo2)))
+
+# Actualizar el modelo
+modelo3 <- update(modelo2, . ~ . - Ankle.Minimum.Girth) #(VOY ELIMINANDO EL CON MAYOR AIC)
+#--------------------------------------
+# Mostrar el modelo obtenido
+cat("\nPaso 4:\n ------\n")
+print(drop1(modelo3, scope = formula(modelo3)))
+
+# Actualizar el modelo
+modelo4 <- update(modelo3, . ~ . - Wrist.Minimum.Girth) #(VOY ELIMINANDO EL CON MAYOR AIC)
+#--------------------------------------
+# Mostrar el modelo obtenido
+cat("\nPaso 5:\n ------\n")
+print(drop1(modelo4, scope = formula(modelo4)))
+
+# Actualizar el modelo
+modelo5 <- update(modelo4, . ~ . - Bitrochanteric.diameter) #(VOY ELIMINANDO EL CON MAYOR AIC)
+#---------------------------------------------------------------------------------------
+# Mostrar el modelo obtenido
+modelo6_str <- capture.output(print (summary (modelo5)))
+cat ("\nModelo RLog conseguido con regresión hacia adelante:\n")
+cat ("------------------------------------------------------\n")
+write.table (modelo6_str [6:10], quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+# Comparar los modelos generados
+cat ("\nComparación de los modelos considerados:\n")
+cat ("------------------------------------------\n")
+print (anova(modelo1, modelo2, modelo3, modelo4, modelo5, test = "LRT") )
+```
+
+## - si su n° de equipo es 5, 6 o 7: utilice búsqueda escalonada usando la función step().
+
+```{r}
+nulo <- glm(EN ~ 1, family = binomial(link = "logit"), data = datos_ent_seleccionados)
+maxi <- glm(EN ~ ., family = binomial(link = "logit"), data = datos_ent_seleccionados)
+#---------------------------------------------------------------------------------------
+
+modelo <- step(nulo, scope = list(lower = nulo, upper = maxi), 
+               direction = "both", k = log(nrow(datos_ent_seleccionados)), 
+               test = "F", trace = 1)
+
+cat("\nModelo RLog conseguido con búsqueda escalonada:\n")
+print(modelo[["coefficients"]])
+```
+
+##- si su n° de equipo es 8, 9 o 10: utilice búsqueda exhaustiva.
+
+```{r}
+# Evaluar todos las combinaciones
+combinaciones <- regsubsets(EN ~ ., data = datos_ent_seleccionados,
+                           nbest = 1, nvmax = 16, method = "exhaustive")
+
+# Graficar los resultados
+plot(combinaciones)
+
+# EXTRAER LOS MEJORES SUBCONJUNTOS
+# Extraer los mejores subconjuntos
+resumen_combinaciones <- summary (combinaciones)
+i_bic_minimo <- which.min (resumen_combinaciones [["bic"]])
+i_r2a_maximo <- which.max (resumen_combinaciones [["adjr2"]])
+
+mejor_comb_bic <- resumen_combinaciones [["which"]] [i_bic_minimo, ]
+mejor_comb_r2a <- resumen_combinaciones [["which"]] [i_r2a_maximo, ]
+
+# Extraer las variables seleccionadas
+comb_mejor_bic <- names (mejor_comb_bic [mejor_comb_bic == TRUE])
+comb_mejor_r2a <- names (mejor_comb_r2a [mejor_comb_r2a == TRUE])
+
+# Eliminar variables indicadoras
+nombres_mejor_bic <- unique(gsub("^(.*)\\d$", "\\1", comb_mejor_bic))
+nombres_mejor_r2a <- unique(gsub("^(.*)\\d$", "\\1", comb_mejor_r2a))
+
+# Obtener las fórmulas
+pred_mejor_bic <- paste(nombres_mejor_bic[-1], collapse = " + ")
+pred_mejor_r2a <- paste(nombres_mejor_r2a[-1], collapse = " + ")
+
+fmla_mejor_bic <- as.formula(paste("EN", pred_mejor_bic, sep = " ~ "))
+fmla_mejor_r2a <- as.formula(paste("EN", pred_mejor_r2a, sep = " ~ "))
+
+# Construir y mostrar los mejores modelos
+modelo_mejor_bic <- lm(fmla_mejor_bic, data = datos_ent_seleccionados)
+modelo_mejor_r2a <- lm(fmla_mejor_r2a, data = datos_ent_seleccionados)
+
+cat ("Modelo que minimiza el BIC:\n")
+cat ("---------------------------\n")
+print(modelo_mejor_bic)
+
+cat ("\nModelo que maximiza el coeficiente de determinación ajustado: \n")
+cat ("----------------------------------------------------------------\n")
+print(modelo_mejor_r2a)
+```
+
+# 6) Evaluar la confiabilidad de los modelos (i.e. que tengan un buen nivel de ajuste y son generalizables) y “arreglarlos” en caso de que tengan algún problema.
+
+## 1. Debe existir una relación lineal entre los predictores y la respuesta transformada.
+
+```{r}
+modelo_final <- glm(EN ~ Hip.Girth + Thigh.Girth + Navel.Girth + Wrist.Minimum.Girth + Ankle.Minimum.Girth + 
+    Ankles.diameter,
+                    family = binomial(link = "logit"),
+                    data = datos_entrenamiento)
+
+cat("\n-------------------------------------------------------------------------------------\n")
+summary(modelo_final)
+cat("\n-------------------------------------------------------------------------------------\n")
+
+cat("\n-------------------------------------------------------------------------------------\n")
+# ELIMINACIÓN POR NO SER SIGNIDICATIVOS DEL RLOG
+modelo_final <- update(modelo_final, . ~ . - Ankle.Minimum.Girth - Ankles.diameter)
+summary(modelo_final)
+cat("\n-------------------------------------------------------------------------------------\n")
+
+#--------------------------------------------------------------------------------------
+# Gráficos de componentes parciales
+crPlots(modelo_final, terms = ~ Hip.Girth + Thigh.Girth + Navel.Girth + Wrist.Minimum.Girth,
+        id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+        col = "steelblue", pch = 19)
+#--------------------------------------------------------------------------------------
+# Gráfico de residuos
+residualPlots(modelo_final, terms = ~ Hip.Girth + Thigh.Girth + Navel.Girth + Wrist.Minimum.Girth,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+              col = "steelblue", pch = 19, col.quad = "red", fitted = FALSE)
+```
+
+## 2. Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_final)
+```
+
+## 3. Multicolinealidad entre los predictores, que en este caso se evalúa y aborda del mismo modo que para RLM (por ejemplo, mediante el factor de inflación de la varianza o la tolerancia).
+
+```{r}
+vif(modelo_final)
+```
+
+## 4. Información incompleta, que se produce cuando no contamos con observaciones suficientes para todas las posibles combinaciones de predictores, en especial para algún nivel de una variable categórica.
+
+```{r}
+# CANTIDAD DE OBSERVACIONES EN EL MODELO
+n_obs <- nrow(datos_entrenamiento)
+cat("Cantidad de observaciones en el modelo:", n_obs, "\n")
+
+# VERICAR QUE TODO VALOR NO SEA N/A
+cat("Cantidad de valores NA en el modelo:", sum(is.na(datos_entrenamiento)), "\n")
+
+# Verificar la cantidad de valores únicos por cada predictor numérico
+
+datos_entrenamiento |> group_by(EN) |>
+  summarise(thigh_unique = n_distinct(Thigh.Girth),
+            navel_unique  = n_distinct(Navel.Girth),
+            bitrochanteric_unique = n_distinct(Bitrochanteric.diameter),
+            hip_unique = n_distinct(Hip.Girth))
+```
+
+## 5. Separación perfecta, que ocurre cuando no hay superposición entre las clases (es decir, como vimos, cuando los predictores separan ambas clases completamente). 
+
+
+
+## 6. Las estimaciones de los coeficientes del modelo no están dominadas por casos influyentes.
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot (modelo_final , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+
+# 7) Usando código estándar1, evaluar el poder predictivo de los modelos con los datos de las 50 personas que no se incluyeron en su construcción en términos de sensibilidad y especificidad.
+
+## A) Evaluación del modelo de RLog en los datos de entrenamiento.
+
+```{r}
+probs_ent <- fitted(modelo_rlog_1)
+
+# Graficar curva ROC, indicando AUC obtenido.
+ROC_ent <- roc(datos_entrenamiento[["EN"]], probs_ent,
+                levels = c("no sobrepeso", "sobrepeso"), direction = "<")
+
+g_ROC_ent <- ggroc(ROC_ent, color = "steelblue")
+g_ROC_ent <- g_ROC_ent + geom_abline(intercept = 1, slope = 1,
+                                      colour = "steelblue1", linetype = "dashed")
+
+g_ROC_ent <- g_ROC_ent + xlab("Especificidad") + ylab("Sensibilidad")
+texto_ent <- sprintf("AUC =%.2f", ROC_ent[["auc"]])
+g_ROC_ent <- g_ROC_ent + annotate("text", x = 0.3, y = 0.3, label = texto_ent)
+g_ROC_ent <- g_ROC_ent + theme_pubr()
+print (g_ROC_ent)
+
+#--------------------------------------------------------------------------------------
+# Obtener las predicciones.
+umbral <- 0.5
+preds_ent <- sapply (probs_ent,
+                     function(p) ifelse(p >= umbral, "sobrepeso", "no sobrepeso"))
+preds_ent <- factor(preds_ent, levels = c("no sobrepeso", "sobrepeso"))
+
+# Obtener y mostrar estadísticas de clasificación en datos de entrenamiento.
+mat_conf_ent <- confusionMatrix(preds_ent, datos_entrenamiento[["EN"]],
+                                positive = "sobrepeso")
+cat ("\nEvaluación de la calidad predictora (cjto. de entrenamiento) : \n")
+cat("------------------------------------------------------------\n")
+print (mat_conf_ent[["table"]])
+cat ("\n")
+cat (sprintf ("    Exactitud: %.3f\n", mat_conf_ent[["overall"]] ["Accuracy"]))
+cat (sprintf (" Sensibilidad: %.3f\n", mat_conf_ent[["byClass"]] ["Sensitivity"]))
+cat (sprintf ("Especificidad: %.3f\n", mat_conf_ent[["byClass"]] ["Specificity"]))
+```
+
+## B) Evaluación del modelo de RLog en los datos de prueba.
+
+```{r}
+# Evaluar el modelo con el conjunto de prueba.
+
+probs_pru <- predict (modelo_rlog_1, datos_pueba, type = "response")
+
+# Graficar curva ROC, indicando AUC obtenido.
+ROC_pru <- roc(datos_pueba [["EN"]], probs_pru,
+               levels = c("no sobrepeso", "sobrepeso"), direction = "<")
+g_ROC_pru <- ggroc (ROC_pru, color = "steelblue")
+g_ROC_pru <- g_ROC_pru + geom_abline (intercept = 1, slope = 1,
+                                      colour = "steelblue1", linetype = "dashed")
+
+g_ROC_pru <- g_ROC_pru + xlab ("Especificidad") + ylab ("Sensibilidad")
+texto_pru <- sprintf("AUC =%.2f", ROC_pru[["auc"]])
+g_ROC_pru <- g_ROC_pru + annotate("text", x = 0.3, y = 0.3, label = texto_pru)
+g_ROC_pru <- g_ROC_pru + theme_pubr()
+print (g_ROC_pru)
+
+#--------------------------------------------------------------------------------------
+# Obtener las predicciones (con el mismo umbral).
+preds_pru <- sapply (probs_pru,
+                     function(p) ifelse(p >= umbral, "sobrepeso", "no sobrepeso"))
+preds_pru <- factor (preds_pru, levels = c("no sobrepeso", "sobrepeso") )
+
+# Obtener y mostrar estadísticas de clasificación en datos de prueba.
+mat_conf_pru <- confusionMatrix (preds_pru, datos_pueba[["EN"]],
+                                 positive = "sobrepeso")
+cat ("\nEvaluación del modelo (cjto. de prueba) : \n")
+cat("------------------------------------------------------------\n")
+print (mat_conf_pru[["table"]])
+cat("\n")
+cat (sprintf ("    Exactitud: %.3f\n", mat_conf_pru[["overall"]] ["Accuracy"]))
+cat (sprintf (" Sensibilidad: %.3f\n", mat_conf_pru[["byClass"]] ["Sensitivity"]))
+cat (sprintf ("Especificidad: %.3f\n", mat_conf_pru[["byClass"]] ["Specificity"]))
+```
+## C) VISTA DIRECTA DE LOS RESULTADOS
+
+```{r}
+# Evaluar el modelo con el conjunto de entrenamiento.
+cat ("\nEvaluación de la calidad predictora (cjto. de entrenamiento) : \n")
+print (mat_conf_ent[["table"]])
+cat ("\n")
+cat (sprintf ("    Exactitud: %.3f\n", mat_conf_ent[["overall"]] ["Accuracy"]))
+cat (sprintf (" Sensibilidad: %.3f\n", mat_conf_ent[["byClass"]] ["Sensitivity"]))
+cat (sprintf ("Especificidad: %.3f\n", mat_conf_ent[["byClass"]] ["Specificity"]))
+
+cat("------------------------------------------------------------\n")
+
+# Evaluar el modelo con el conjunto de prueba.
+cat ("\nEvaluación del modelo (cjto. de prueba) : \n")
+print (mat_conf_pru[["table"]])
+cat("\n")
+cat (sprintf ("    Exactitud: %.3f\n", mat_conf_pru[["overall"]] ["Accuracy"]))
+cat (sprintf (" Sensibilidad: %.3f\n", mat_conf_pru[["byClass"]] ["Sensitivity"]))
+cat (sprintf ("Especificidad: %.3f\n", mat_conf_pru[["byClass"]] ["Specificity"]))
+```
