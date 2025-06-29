@@ -1,0 +1,484 @@
+---
+title: "Untitled"
+author: "EJEMPLO"
+date: "2025-06-22"
+output: html_document
+---
+
+# 1) REGRESIÓN LINEAL MULTIPLE:
+
+## A) MLR para predecir la potencia del motor (en vehículos entre 2 y 5 mil libras) a partir de dos predictores: 
+- El volumen útil de sus cilindros 
+- El peso del vehículo.
+```{r}
+library (dplyr)
+library (scatterplot3d)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5)
+
+# Ajustar y mostrar un modelo de LRM para la potencia del motor
+modelo <- lm(hp ~ disp + wt, data = datos)
+print (summary (modelo) )
+```
+
+### a) Gráfico 3D del plano de regresión obtenido para el ejemplo.
+
+```{r}
+# Graficar el modelo ajustado, diferenciando valores sobre y bajo el plano
+i_color <- 1 + (resid(modelo) > 0)
+
+g <- scatterplot3d (
+  datos [["disp"]], datos [["wt" ]], datos [[ "hp" ]], type = "p", angle = 50,
+  pch = 16, color = c("steelblue1", "steelblue4") [i_color],
+  xlab = bquote ("Volumen util de los cilindros" ~ group ("[", "in"^3, "]")),
+  ylab = "Peso [1b x 1000]\n\n\n",
+  zlab = "Potencia [hp]",
+  mar = c(3, 3, 1, 0) + 0.1)
+```
+
+### b) Uso del modelo de RLM para predecir la potencias de otros vehículos.
+
+```{r}
+# Definir valores de los predictores para vehículos no incluidos en el conjunto mtcars.
+modelos <- c("Chevrolet Vega", "Ford Pinto", "AMC Pacer", "Plymouth Valiant Duster", "Chevrolet Impala Caprice")
+
+disp <- c(140, 98, 232, 360, 350)
+wt <- c(2.2, 2.0, 3.0, 3.5, 2.5)
+datos_nuevos <- data.frame(disp, wt)
+rownames (datos_nuevos) <- modelos
+
+# Usar el modelo para predecir el rendimiento de otros modelos
+hp_est <- predict (modelo, newdata = datos_nuevos)
+datos_nuevos <- cbind (datos_nuevos, hp_est)
+
+# Mostrar los resultados
+cat ("Predicciones:\n")
+print (datos_nuevos)
+```
+
+# 2) PREDICCTORES CATEGÓRICOS NO DICOTOMICOS
+
+## A) Creacion de variabies artiliciales para varlabies categoricas.
+
+```{r}
+library (dummy)
+
+# Crear la matriz de datos del ejemplo
+persona <- 1:9
+sexo <- c("F", "F", "M", "M", "M", "M", "F" , "M", "F" )
+tipo <- c("B", "D", "A", "B", "A", "C", "D", "D", "D")
+valor <- c(1.68, 2.79, 1.92, 2.26, 2.1, 2.63, 2.19, 3.62, 2.76)
+datos <- data.frame (persona, sexo, tipo, valor)
+
+# Crear las variables indicadoras
+datos_indicadoras <- dummy (datos)
+datos_indicadoras [["sexo_F"]] <- NULL
+datos_indicadoras [["tipo_A"]] <- NULL
+datos_indicadoras [["valor"]] <- datos [["valor"]]
+
+# Crear y mostrar el modelo de RLM usando variables indicadoras
+cat ("Modelo de RLM con variables indicadoras explícitas\n")
+cat ("---------------------------------------------------------------------")
+modelo <- lm(valor ~ sexo_M + tipo_B + tipo_C + tipo_D, datos_indicadoras)
+print (modelo)
+
+# Crear y mostrar el modelo de RLM dejando el trabajo a la función 1m()
+cat ("Modelo de RLM con variables indicadoras implícitas\n")
+
+
+cat ("---------------------------------------------------------------------")
+modelo_directo <- lm(valor ~ sexo + tipo, datos)
+print (modelo_directo)
+```
+
+# 3) BONDAD DE AJUSTE DE UN MODELO DE RLM:
+
+## A) COMPARACIÓN DE DOS MODALOS LINALES:
+
+```{r}
+library (dplyr)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5)
+
+# Ajustar el modelo nulo, sin predictores# solo intercepto
+modelo_0 <- lm(hp ~ 1, data = datos)
+
+# Ajustar un modelo con volumen de los cilindros como predictor
+modelo_1 <- lm(hp ~ disp, data = datos)
+
+# Ajustar un modelo añadiendo el peso como predictor
+modelo_2 <- lm(hp ~ disp + wt, data = datos)
+
+# Mostrar AIC y BIC de los modelos
+cat ("Modelo 0: AIC =", AIC(modelo_0), "\n")
+cat ("Modelo 1: AIC =", AIC(modelo_1), "\n")
+cat ("Modelo 2: AIC =", AIC(modelo_2), "\n")
+
+cat ("Modelo 0: BIC =", BIC(modelo_0), "\n")
+cat ("Modelo 1: BIC =", BIC(modelo_1), "\n")
+cat ("Modelo 2: BIC =", BIC(modelo_2), "\n")
+
+# Comparar los modelos
+comparacion <- anova(modelo_0, modelo_1, modelo_2)
+cat ("Prueba de bondad de ajuste: \n")
+cat ("--------------------------\n")
+print (comparacion)
+```
+
+# 4) SELECCIÓN DE PREDICTORES:
+
+## A) REGRESIÓN JERARQUICA:
+
+```{r}
+library (dplyr)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
+
+# Ajustar el modelo inicial con el volumen de los cilindros como predictor
+modelo_1 <- lm(hp ~ disp, data = datos)
+
+# Incorporar al modelo el número de cilindros y verificar su utilidad
+modelo_2 <- update (modelo_1, . ~ . + cyl)
+print (anova(modelo_1, modelo_2), signif.legend = FALSE)
+# Como era esperable, la variable "cyl" no aporta al ajuste del modelo
+
+# Reemplazar el número de cilindros por el número de carburadores y
+# verificar su utilidad.
+modelo_3 <- update(modelo_2, . ~ . - cyl + carb)
+cat ("\n")
+print (anova(modelo_1, modelo_3), signif.legend = FALSE)
+# La variable "carb" si genera un mejor ajuste,
+# por lo que la mantendremos en el modelo.
+
+# Y en este último modelo, la variable "cyl" sigue siendo irrelevante?
+modelo_4 <- update (modelo_3, . ~ . + cyl)
+cat ("\n")
+print (anova(modelo_3, modelo_4), signif.legend = FALSE)
+# Ahora la variable "cyl" sí ayuda a obtener un mejor modelo!
+
+# Incorporar al modelo el peso del vehículo y verificar su utilidad
+modelo_5 <- update(modelo_4, . ~ . + wt)
+cat ("\n")
+print (anova(modelo_4, modelo_5), signif.legend = FALSE)
+# Vemos que el peso no aporta a un mejor ajuste. Probablemente está muy relacionado
+# al número de cilindros y carburadores del motor, ya considerados en el modelo.
+
+# Reemplazar el peso del vehículo por el tipo de motor y verificar su utilidad
+modelo_6 <- update (modelo_5, . ~ . - wt + vs)
+cat ("\n")
+print (anova (modelo_4, modelo_6), signif.legend = FALSE)
+# Vemos que tipo de motor tampoco ayuda a conseguir un mejor modelo
+
+# Mostrar el modelo obtenido
+cat("\n\nModelo obtenido con regresión jerárquica:\n")
+cat ("---------------------------------------\n")
+print (summary (modelo_4), signif.legend = FALSE)
+```
+
+## B) REGRESIÓN PASO A PASO:
+
+### a) SELECCIÓN DE DATOS:
+
+```{r}
+library (dplyr)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
+
+# Ajustar el modelo nulo y el modelo completo
+nulo <- lm(hp ~ 1, data = datos)
+completo <- lm (hp ~ ., data = datos)
+```
+
+### b) SELECCIÓN HACIA ADELANTE:
+
+```{r}
+cat ("Selección hacia adelante: \n")
+cat("--------------------------\n\n")
+#------------------------------------------------------------
+# Evaluar las variables para seleccionar el primer predictor
+paso <- add1(nulo, scope = completo, test = "F")
+print (paso, digits = 3, signif.legend = FALSE)
+
+# Agregar la variable que logra la mayor reducción en AIC (EL MENOR)
+modelo <- update(nulo, . ~ . + cyl)
+#------------------------------------------------------------
+# Evaluar las variables para seleccionar el segundo predictor
+paso <- add1 (modelo, scope = completo, test = "F")
+cat ("\n")
+print (paso, digits = 3, signif.legend = FALSE)
+
+# Agregar la variable que logra la mayor reducción en AIC (EL MENOR)
+modelo <- update (modelo, . ~ . + carb)
+#------------------------------------------------------------
+# Mostrar los coeficientes del modelo conseguido
+cat ("\nModelo obtenido: \n")
+print (modelo [["coefficients"]])
+```
+
+### c) ELIMINACIÓN HACIA ATRÁS:
+
+```{r}
+cat("\n\n")
+cat ("Eliminación hacia atrás: \n")
+cat("--------------------------\n\n")
+
+# Evaluar la eliminación de uno de los predictores del modelo
+paso <- drop1(completo, test = "F")
+print (paso, digits = 3, signif.legend = FALSE)
+
+# Quitar el predictor que menos aporta (con menor estadistico F)
+modelo <- update (completo, . ~ . - wt)
+
+# Evaluar la eliminación de otro de los predictores que quedan en el modelo
+paso <- drop1 (modelo, test = "F")
+cat ("\n")
+print (paso, digits = 3, signif.legend = FALSE)
+
+# Quitar el predictor que menos aporta (con menor estadístico F)
+modelo <- update (modelo, . ~ . - drat)
+
+# Mostrar los coeficientes del modelo conseguido
+cat("\nModelo obtenido: \n")
+print (modelo [["coefficients"]])
+```
+
+### d) REGRESIÓN ESCALONADA: 
+
+```{r}
+library (dplyr)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
+
+# Ajustar el modelo nulo y el modelo completo
+nulo <- lm(hp ~ 1, data = datos)
+completo <- lm(hp ~. , data = datos)
+
+# Realizar regresion escalonada usando el menor BIC
+# como criterio (aunque se reporta como AIC), bajando
+# (temporalmente) el número de cifras significativas
+# y el ancho máximo de la pantalla al imprimir.
+opt <- options (digits = 2, width = 54)
+
+modelo <- step (nulo, scope = list (lower = nulo, upper = completo),
+                direction = "both", k = log(nrow(datos)),
+                test = "F", trace = 1)
+
+options (digits = opt[[1]], width = opt[[2]])
+
+# Mostrar los coeficientes del modelo conseguido
+cat ("\ nModelo obtenido:\n")
+print (modelo [["coefficients"]])
+```
+
+## C) BUSQUEDA EXHAUSTIVA: (OJO, PARA ESTE CASO, VER LA CONSOLA PORQ SE DEFORMA)
+
+```{r}
+library (dplyr)
+library (leaps)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
+
+# Evaluar todos las combinaciones
+combinaciones <- regsubsets (hp ~ ., data = datos,
+                             nbest = 1, nvmax = 16, method = "exhaustive")
+
+# Graficar los resultados
+plot (combinaciones)
+
+# Extraer los mejores subconjuntos
+resumen_combinaciones <- summary (combinaciones)
+i_bic_minimo <- which.min (resumen_combinaciones [["bic"]])
+i_r2a_maximo <- which.max (resumen_combinaciones [["adjr2"]])
+
+mejor_comb_bic <- resumen_combinaciones [["which"]] [i_bic_minimo, ]
+mejor_comb_r2a <- resumen_combinaciones [["which"]] [i_r2a_maximo, ]
+
+# Extraer las variables seleccionadas
+comb_mejor_bic <- names (mejor_comb_bic [mejor_comb_bic == TRUE])
+comb_mejor_r2a <- names (mejor_comb_r2a [mejor_comb_r2a == TRUE])
+
+# Eliminar variables indicadoras
+nombres_mejor_bic <- unique(gsub("^(.*)\\d$", "\\1", comb_mejor_bic))
+nombres_mejor_r2a <- unique(gsub("^(.*)\\d$", "\\1", comb_mejor_r2a))
+
+# Obtener las fórmulas
+pred_mejor_bic <- paste(nombres_mejor_bic[-1], collapse = " + ")
+pred_mejor_r2a <- paste(nombres_mejor_r2a[-1], collapse = " + ")
+
+fmla_mejor_bic <- as.formula(paste("hp", pred_mejor_bic, sep = " ~ "))
+fmla_mejor_r2a <- as.formula(paste("hp", pred_mejor_r2a, sep = " ~ "))
+
+# Construir y mostrar los mejores modelos
+modelo_mejor_bic <- lm(fmla_mejor_bic, data = datos)
+modelo_mejor_r2a <- lm(fmla_mejor_r2a, data = datos)
+
+cat ("Modelo que minimiza el BIC:\n")
+cat ("---------------------------\n")
+print(modelo_mejor_bic)
+
+cat ("\nModelo que maximiza el coeficiente de determinación ajustado: \n")
+cat ("----------------------------------------------------------------\n")
+print(modelo_mejor_r2a)
+```
+
+# 5) CONFIAVILIDAD DE UN MODELO RLM (LOS 9 PASOS) -> USANDO 
+
+```{r}
+library (carData)
+library(ggplot2)
+library (GGally)
+library (caret)
+library (dplyr)
+library(car)
+library(carData)
+library (ggpubr)
+library(leaps)
+library(car)
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
+
+modelo_prueba <- lm (hp ~ cyl + vs + am + gear + carb, data = datos)
+```
+
+### 1. La variable de respuesta debe ser cuantitativa y continua, sin restricciones para su variabilidad.
+
+```{r}
+str(datos$hp)
+```
+
+### 2. Los predictores deben ser cuantitativos o dicotómicos (de ahí la necesidad de variables indicadoras para manejar más de dos niveles).
+
+```{r}
+str(datos[, c("cyl", "vs", "am", "gear", "carb")])
+```
+
+### 3. Los predictores deben tener algún grado de variabilidad (su varianza no debe ser igual a cero). En otras palabras, no pueden ser constantes.
+
+```{r}
+apply(datos[, c("cyl", "vs", "am", "gear", "carb")], 2, var)
+```
+
+### 4. Cada predictor debe estar relacionado linealmente con la respuesta.
+
+```{r}
+# GRAFICO DE RECIDUOS:
+residualPlots(modelo_prueba, terms = ~ cyl + vs + am + gear + carb,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+              col = "steelblue", pch = 19, col.quad = "red")
+
+# GRAFICO MARGINALES:
+marginalModelPlots(modelo_prueba, sd = TRUE, terms = ~ cyl + vs + am + gear + carb,
+                   id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+                   col = "steelblue", pch = 20, col.line = c("blue", "red"))
+```
+
+### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
+
+
+### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
+
+```{r}
+ncvTest(modelo_prueba)
+```
+
+### 7. Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_prueba)
+```
+
+### 8. No debe existir multicolinealidad. Esto significa que no deben darse relaciones lineales fuertes (co-eficientes de correlación altos) entre dos o más predictores.
+
+```{r}
+vif(modelo_prueba)
+```
+
+### 9. Las estimaciones de los coeficientes del modelo no debe estar alterados por unos pocas observaciones
+influyentes.
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot ( modelo_prueba , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+
+# 6) CALIDAD PREDICTIVA DE UN MODELO RLM
+
+## A) Comparación de los dos modelos lineales del ejemplo.
+
+### VALIDACIÓN CRUZADA DEJANDO UNO FUERA [V/S] VALIDACIÓN CRUZADA DEJANDO UNO FUERA [QUITANDO UN PREDICTOR]
+
+```{r}
+library (caret)
+library (dplyr)
+
+# Imprimir mensajes de advertencia a medida que ocurren
+opt <- options (warn = 1)
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
+
+#---------------------------------------------------------------------------------
+# Ajustar y mostrar el modelo usando validación cruzada dejando uno fuera
+set.seed (111)
+fmla <- formula ("hp ~ mpg + cyl + disp + drat + qsec + vs + am + gear + carb")
+entrenamiento <- train (fmla, data = datos, method = "lm",
+                        trControl = trainControl (method = "LOOCV"))
+
+modelo <- entrenamiento [["finalModel"]]
+
+# Mostrar la fórmula y las predicciones del modelo
+cat ("Modelo obtenido con regsubset () :\n")
+cat ("---------------------------------\n\n")
+print (fmla)
+
+cat ("Predicciones en cada pliegue: \n")
+print (entrenamiento [["pred"]])
+
+# Mostrar el resultado estimado para el modelo
+cat ("\nError estimado para el modelo:\n")
+print (entrenamiento [["results"]])
+
+#---------------------------------------------------------------------------------
+# Ajustar y mostrar el modelo usando validación cruzada
+# dejando uno fuera sin la variable "carb".
+set.seed (111)
+fmla <- formula ("hp ~ mpg + cyl + disp + drat + qsec + vs + am + gear")
+
+entrenamiento <- train (fmla, data = datos, method = "lm",
+                        trControl = trainControl (method = "LOOCV" ) )
+
+modelo <- entrenamiento [["finalModel"]]
+
+# Mostrar la fórmula y las predicciones del modelo modificado
+cat ("\n\nModelo con un predictor menos: \n")
+cat("-----------------------------------\n\n")
+print (fmla)
+cat("\n")
+
+cat ("Predicciones en cada pliegue: \n")
+print (entrenamiento [["pred"]])
+
+# Mostrar el resultado estimado para el modelo
+cat ("\nError estimado para el modelo:\n")
+print (entrenamiento [["results"]])
+
+# Reestabler opción para warnings
+options (warn = opt [[1]] )
+```
+
+
+

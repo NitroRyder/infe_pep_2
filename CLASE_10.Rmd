@@ -1,0 +1,284 @@
+---
+title: "Untitled"
+author: "EJEMPLO"
+date: "2025-06-22"
+output: html_document
+---
+
+# 1) REGRESIÓN LINEAL MEDIANTE MÍNIMOS CUADRADOS
+
+## A) Ajuste de un modelo de regresión lineal simple (RLS)
+
+```{r}
+library ( dplyr )
+library ( ggpubr )
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter ( wt > 2 & wt < 5)
+
+# Ajustar un modelo de RLS con R
+modelo <- lm( hp ~ disp , data = datos )
+print ( summary ( modelo ) )
+
+# Graficar los datos y el modelo obtenido
+g1 <- ggscatter ( datos , x = "disp", y = "hp",
+                  color = "steelblue" , fill = "steelblue1" , alpha = 0.5 , size = 3 ,
+                  ylab = "Potencia[hp]")
+
+g1 <- g1 + geom_abline ( intercept = coef ( modelo ) [1] , slope = coef ( modelo ) [2] ,
+                           color = "steelblue4")
+
+g1 <- g1 + xlab ( bquote ("Volumen útil de los cilindros" ~ group ("[", "in"^3 , "]") ) )
+
+# Definir valores del predictor para veh í culos no inclui dos
+# en el conjunto mtcars .
+disp <- c (169.694 , 230.214 , 79.005 , 94.085 , 343.085 ,
+           136.073 , 357.305 , 288.842 , 223.128 , 129.217 ,
+           146.432 , 193.474 , 376.874 , 202.566 , 114.928)
+
+# Usar el modelo para predecir el rendimiento de otros modelos
+potencia_est <- predict ( modelo , data.frame ( disp ) )
+
+# Graficar los valores predichos
+nuevos <- data.frame ( disp , hp = potencia_est )
+
+g2 <- ggscatter ( nuevos , x = "disp", y = "hp",
+                  color = "steelblue" , fill = "steelblue1" , alpha = 0.5 , size = 3 ,
+                  ylab = "Potencia[hp ]")
+
+g2 <- g2 + xlab ( bquote ("Volumen útil de los cilindros" ~ group ("[", "in"^3 , "]") ) )
+
+# Unir los gr á ficos en uno solo
+g1 <- ggpar ( g1 , xlim = c(75 , 405) , ylim = c(60 , 340) )
+g2 <- ggpar ( g2 , xlim = c(75 , 405) , ylim = c(60 , 340) )
+
+g <- ggarrange ( g1 , g2 , labels = c("Modelo" , "Predicciones") , hjust = c( -1.2 , -0.7) )
+print ( g )
+```
+
+## B) Regresión lineal simple con un predictor dicotómico:
+
+```{r}
+library ( dplyr )
+library ( ggpubr )
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter ( wt > 2 & wt < 5)
+
+# Verificar correlaci ó n entre hp y dos variables dicot ó micas
+print ( cor ( datos [ , c("hp", "am", "vs") ]) )
+
+# Ajustar un modelo de RLS con R para el predictor " vs "
+modelo_vs <- lm( hp ~ vs , data = datos )
+print ( summary ( modelo_vs ) )
+
+# Graficar el modelo de RLS obtenido
+g1 <- ggscatter ( datos , x = "vs", y = "hp",
+                  color = "steelblue" , fill = "steelblue1" , alpha = 0.5 , size = 3 ,
+                  xlab = "Forma del motor" , ylab = "Potencia[hp]" , xticks.by = 1)
+
+g1 <- g1 + geom_abline ( intercept = coef ( modelo_vs )[1] , slope = coef ( modelo_vs )[2] ,
+                           color = "steelblue4")
+print ( g1 )
+
+# Graficar los residuos del modelo
+residuos <- modelo_vs [["residuals" ]]
+datos <- cbind ( datos , residuos )
+
+g2 <- ggscatter ( datos , x = "vs", y = "residuos" ,
+                  color = "steelblue" , fill = "steelblue1" , alpha = 0.5 , size = 3 ,
+                  xlab = "Forma del motor" , ylab = "Residuos[hp]" , xticks.by = 1)
+
+g2 <- g2 + geom_hline ( yintercept = 0 , color = "steelblue4")
+
+# Unir los gr á ficos en uno solo
+g <- ggarrange ( g1 , g2 , labels = c("Modelo" , "Residuos") , hjust = c( -1.4 , -1.2) )
+print ( g )
+```
+
+
+## C) Evaluación del modelo de regresión lineal simple usado como ejemplo.
+
+### 1) DEFINICIÓN DE LM:
+
+```{r}
+library ( car )
+library ( dplyr )
+library ( ggpubr )
+
+# Cargar y filtrar los datos .
+datos <- mtcars |> filter ( wt > 2 & wt < 5)
+
+# Ajustar modelo con R .
+modelo <- lm( hp ~ disp , data = datos )
+modelo
+```
+
+
+### 2) DESPLEGAR GRÁFICOS DE RESIDUOS Y PRUEBAS DE CURVATURA:
+
+```{r}
+# Desplegar gr á ficos de residuos y mostrar pruebas de curvatura .
+cat ("Pruebas de curvatura:\ n")
+residualPlots ( modelo , type = "rstandard" ,
+                id = list ( method = "r", n = 3 , cex = 0.7 , location = "lr") ,
+                col = "steelblue" , pch = 20 , col.quad = "red")
+```
+
+
+### 3) PRUEBA DE INDEPENDENCIA DE LOS RESIDUOS:
+
+```{r}
+# Verificar independencia de los residuos
+set.seed (19)
+db <- durbinWatsonTest ( modelo )
+cat ("\nPrueba de independencia:\n" )
+print ( db )
+```
+
+
+### 4) DESPLEGAR GRÁFICOS MARGINALES:
+
+```{r}
+# Desplegar gr á ficos marginales .
+marginalModelPlots ( modelo , sd = TRUE ,
+                     id = list ( method = "r", n = 3 , cex = 0.7 , location = "lr") ,
+                     col = "steelblue" , pch = 20 , col.line = c("steelblue" , "red") )
+```
+
+
+### 5) PRUEBA DE HOMOCEDASTICIDAD:
+
+```{r}
+# Prueba de la varianza del error no constante .
+cat ("\nPrueba de homocedasticidad:\n" )
+print ( ncvTest ( modelo ) )
+```
+
+
+### 6) DESPLEGAR GRÁFICOS DE INFLUENCIA:
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot ( modelo , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+
+## D) RLS:
+
+### 1) RLS usando validación cruzada:
+
+```{r}
+library ( dplyr )
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter ( wt > 2 & wt < 5)
+n <- nrow ( datos )
+
+# Crear conjuntos de entrenamiento y prueba .
+set.seed (101)
+n_entrenamiento <- floor (0.8 * n )
+i_entrenamiento <- sample.int ( n = n , size = n_entrenamiento , replace = FALSE )
+entrenamiento <- datos [i_entrenamiento, ]
+prueba <- datos [ - i_entrenamiento, ]
+
+# Ajustar y mostrar el modelo con el conjunto de entrenamiento .
+modelo <- lm( hp ~ disp , data = entrenamiento )
+print ( summary ( modelo ) )
+
+#----------------------------------------------------------------------------------
+cat("--------------------------------------------------------------\n")
+# Calcular error cuadrado promedio para el conjunto de entrenamiento .
+rmse_entrenamiento <- sqrt ( mean ( resid ( modelo )**2) )
+cat ("MSE para el conjunto de entrenamiento:" , rmse_entrenamiento , "\n")
+
+# Hacer predicciones para el conjunto de prueba .
+predicciones <- predict ( modelo , prueba )
+
+# Calcular error cuadrado promedio para el conjunto de prueba .
+error <- prueba [[ "hp"]] - predicciones
+rmse_prueba <- sqrt ( mean ( error ** 2) )
+cat ("MSE para el conjunto de prueba:" , rmse_prueba )
+```
+
+### 2) RLS usando validación cruzada de K pliegues.
+
+```{r}
+library ( caret )
+library ( dplyr )
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter ( wt > 2 & wt < 5)
+n <- nrow ( datos )
+
+# Ajustar y mostrar el modelo usando validaci ó n cruzada de 5 pliegues
+set.seed (111)
+entrenamiento <- train ( hp ~ disp , data = datos , method = "lm",
+                         trControl = trainControl ( method = "cv", number = 5) )
+modelo <- entrenamiento [[ "finalModel" ]]
+print ( summary ( modelo ) )
+
+#----------------------------------------------------------------------------------
+cat("--------------------------------------------------------------\n")
+# Mostrar los resultados de cada pliegue
+cat ("Errores en cada pliegue:\n")
+print ( entrenamiento [[ "resample" ]])
+
+# Mostrar el resultado estimado para el modelo
+cat ("\nError estimado para el modelo:\n" )
+print ( entrenamiento [[ "results" ]])
+```
+### 3) RLS usando validación cruzada dejando uno fuera.
+
+```{r}
+library ( caret )
+library ( dplyr )
+
+# Cargar y filtrar los datos
+datos <- mtcars |> filter ( wt > 2 & wt < 5)
+n <- nrow ( datos )
+
+# Ajustar y mostrar el modelo usando validaci ó n cruzada dejando uno fuera
+set.seed (111)
+entrenamiento <- train ( hp ~ disp , data = datos , method = "lm",
+                         trControl = trainControl ( method = "LOOCV") )
+modelo <- entrenamiento [[ "finalModel" ]]
+print ( summary ( modelo ) )
+
+#----------------------------------------------------------------------------------
+cat("--------------------------------------------------------------\n")
+# Mostrar las predicciones para cada observaci ó n
+cat ("Predicciones en cada pliegue:\n" )
+print ( entrenamiento [[ "pred" ]])
+
+# Mostrar el resultado estimado para el modelo
+cat ("\nError estimado para el modelo:\n" )
+print ( entrenamiento [[ "results" ]])
+```
+
+### --------------------
+### EXTRA:
+### --------------------
+### 4) RLS CON BOOTSTRAP
+
+```{r}
+library(boot)
+
+# Función que retorna el coeficiente de pendiente para una muestra bootstrap
+slope_fn <- function(data, indices) {
+  d <- data[indices, ]  # Muestra bootstrap
+  modelo <- lm(hp ~ disp, data = d)
+  return(coef(modelo)[2])  # pendiente
+}
+
+# Aplicar bootstrapping con 1000 repeticiones
+set.seed(123)
+resultados <- boot(data = mtcars, statistic = slope_fn, R = 1000)
+
+# Resumen
+print(resultados)
+
+# Intervalo de confianza bootstrap (percentil)
+boot.ci(resultados, type = "perc")
+```

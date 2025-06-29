@@ -1,0 +1,340 @@
+---
+title: "Untitled"
+author: "EJEMPLO"
+date: "2025-06-25"
+output: html_document
+---
+
+# 1) REGRECIÓN LOGISTICA:
+
+## A) Ejemplo de la construcción de un modelo de regresión logística:
+
+```{r}
+library (caret)
+library (dplyr)
+library (ggpubr)
+library (pROC)
+
+# Cargar y filtrar los datos, teniendo cuidado de dejar "automático" como el
+# 2do nivel de la variable "am" para que sea considerada como la clase positiva.
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+mutate (am = factor (am, levels = c(1,0), labels = c("manual", "automatico")))
+
+# Separar conjuntos de entrenamiento y prueba, fijando una semilla para asegurar la reproducibilidad de los resultados.
+set.seed(101)
+n <- nrow (datos)
+i_muestra <- sample.int (n = n, size = floor (0.7 * n), replace = FALSE)
+
+datos_ent <- datos [i_muestra, ]
+datos_pru <- datos [-i_muestra, ]
+
+# Ajustar y mostrar modelo
+modelo <- glm(am ~ wt, family = binomial (link = "logit") , data = datos_ent)
+
+print (summary (modelo), signif.stars = FALSE)
+cat (" --- \n")
+print (anova (modelo, test = "LRT"), signif.stars = FALSE)
+```
+
+## B) Evaluación del modelo de RLog en los datos de entrenamiento.
+
+```{r}
+# Evaluar el modelo con el conjunto de entrenamiento
+
+probs_ent <- fitted (modelo)
+
+# Graficar curva ROC, indicando AUC obtenido.
+ROC_ent <- roc(datos_ent[["am"]], probs_ent,
+                levels = c("manual", "automatico"), direction = "<")
+
+g_ROC_ent <- ggroc(ROC_ent, color = "steelblue")
+g_ROC_ent <- g_ROC_ent + geom_abline(intercept = 1, slope = 1,
+                                      colour = "steelblue1", linetype = "dashed")
+
+g_ROC_ent <- g_ROC_ent + xlab("Especificidad") + ylab("Sensibilidad")
+texto_ent <- sprintf("AUC =%.2f", ROC_ent[["auc"]])
+g_ROC_ent <- g_ROC_ent + annotate("text", x = 0.3, y = 0.3, label = texto_ent)
+g_ROC_ent <- g_ROC_ent + theme_pubr()
+print (g_ROC_ent)
+
+#--------------------------------------------------------------------------------------
+# Obtener las predicciones.
+umbral <- 0.5
+preds_ent <- sapply (probs_ent,
+                     function(p) ifelse(p >= umbral, "automatico", "manual"))
+preds_ent <- factor(preds_ent, levels = c("manual", "automatico"))
+
+# Obtener y mostrar estadísticas de clasificación en datos de entrenamiento.
+mat_conf_ent <- confusionMatrix(preds_ent, datos_ent[["am"]],
+                                positive = "automatico")
+cat ("n\nEvaluación de la calidad predictora (cjto. de entrenamiento) : \n")
+cat("------------------------------------------------------------\n")
+print (mat_conf_ent[["table"]])
+cat ("\n")
+cat (sprintf ("       Exactitud: %. 3f\n", mat_conf_ent[["overall"]] ["Accuracy"]))
+cat (sprintf ("  Sensibilidad: %.3f\n", mat_conf_ent[["byClass"]] ["Sensitivity"]))
+cat (sprintf ("Especificidad: %.3f\n", mat_conf_ent[["byClass"]] ["Specificity"]))
+```
+
+## C) Evaluación del modelo de RLog en los datos de prueba.
+
+```{r}
+# Evaluar el modelo con el conjunto de prueba.
+
+probs_pru <- predict (modelo, datos_pru, type = "response")
+
+# Graficar curva ROC, indicando AUC obtenido.
+ROC_pru <- roc(datos_pru [["am"]], probs_pru,
+               levels = c("manual", "automatico"), direction = "<")
+g_ROC_pru <- ggroc (ROC_pru, color = "steelblue")
+g_ROC_pru <- g_ROC_pru + geom_abline (intercept = 1, slope = 1,
+                                      colour = "steelblue1", linetype = "dashed")
+
+g_ROC_pru <- g_ROC_pru + xlab ("Especificidad") + ylab ("Sensibilidad")
+texto_pru <- sprintf("AUC =%.2f", ROC_pru[["auc"]])
+g_ROC_pru <- g_ROC_pru + annotate("text", x = 0.3, y = 0.3, label = texto_pru)
+g_ROC_pru <- g_ROC_pru + theme_pubr()
+print (g_ROC_pru)
+
+#--------------------------------------------------------------------------------------
+# Obtener las predicciones (con el mismo umbral).
+preds_pru <- sapply (probs_pru,
+                     function(p) ifelse(p >= umbral, "automatico", "manual"))
+preds_pru <- factor (preds_pru, levels = c("manual", "automatico") )
+
+# Obtener y mostrar estadísticas de clasificación en datos de prueba.
+mat_conf_pru <- confusionMatrix (preds_pru, datos_pru[["am"]],
+                                 positive = "automatico")
+cat ("n\nEvaluación del modelo (cjto. de prueba) : \n")
+cat("------------------------------------------------------------\n")
+print (mat_conf_pru[["table"]])
+cat("\n")
+cat (sprintf ("       Exactitud: %. 3f\n", mat_conf_pru[["overall"]] ["Accuracy"]))
+cat (sprintf ("  Sensibilidad: %.3f\n", mat_conf_pru[["byClass"]] ["Sensitivity"]))
+cat (sprintf ("Especificidad: %.3f\n", mat_conf_pru[["byClass"]] ["Specificity"]))
+```
+
+
+## D) Ajuste y evaluación de un modelo de regresión logística usando validación cruzada.
+```{r}
+library (caret)
+library (dplyr)
+library (purrr)
+
+# Cargar y filtrar los datos, teniendo cuidado de dejar "automático" como el
+# 2do nivel de la variable "am" para que sea considerada como la clase positiva.
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+mutate (am = factor (am, levels = c(1, 0), labels = c("manual", "automatico")))
+
+# Ajustar modelo usando validación cruzada de 4 pliegues, asegurando que
+# se guardan las predicciones de cada pliegue.
+set.seed (113)
+modelo_ent <- train (am ~ wt, data = datos, method = "glm",
+                     family = binomial (link = "logit"),
+                     trControl = trainControl (method = "cv", number = 4,
+                                               savePredictions = TRUE) )
+
+# Mostrar los coeficientes del modelo obtenido
+modelo_final <- modelo_ent [["finalModel"]]
+modelo_final_str <- capture.output(print(summary (modelo_final), signif.stars = FALSE))
+
+cat ("Coeficientes del modelo final:\n")
+write.table(modelo_final_str[6:9], quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+#--------------------------------------------------------------------------------------
+# Obtener las predicciones por pliegue
+preds <- modelo_ent [["pred"]] |> mutate (pliegue = factor (Resample) ) |>
+  select (pred, obs, pliegue)
+
+# Construir las matrices de confusión de cada pliegue
+conf_mat_list <- preds |> group_split (pliegue) |>
+  map (~ confusionMatrix (.x[["pred"]], .x[["obs"]]))
+
+# Extraer las métricas de evaluación de interés
+metricas_tab <- conf_mat_list |>
+map_df (~ data.frame (Exactitud = .$overall ["Accuracy"],
+                      Sensibilidad = .$byClass ["Sensitivity"],
+                      Especificidad = .$byClass ["Specificity"]))
+
+# Agregar el pliegue, los promedios y las desviaciones estándar
+metricas_tab <- cbind (metricas_tab, Pliegue = levels (preds [["pliegue"]]))
+medias_tab <- data.frame (t(apply (metricas_tab[, -4], 2, mean)), Pliegue = "Media")
+desv_tab <- data.frame (t(apply (metricas_tab[, -4], 2, sd)) , Pliegue = "D.E.")
+metricas_tab <- rbind (metricas_tab, medias_tab, desv_tab)
+
+# Formatear las columnas
+formatea_col <- function(cn) format (metricas_tab[[cn]], digits = 3,
+                                     width = nchar (cn), justify = "right")
+metricas_str_tab <- sapply (colnames(metricas_tab), formatea_col,
+                            USE.NAMES = FALSE, simplify = TRUE)
+
+# Mostrar las métricas obtenidas
+encab <- paste (colnames (metricas_tab) , collapse = "  ")
+
+cat ("Detalle por pliegue:\n", encab, "\n")
+cat (strrep("-", nchar (encab)), "\n")
+write.table (metricas_str_tab [1:4, ], sep = "  ",
+             row.names = FALSE, col.names = FALSE, quote = FALSE)
+cat (strrep("-", nchar (encab)), "\n")
+write.table (metricas_str_tab [5:6, ], sep = "  ",
+             row.names = FALSE, col.names = FALSE, quote = FALSE)
+```
+
+# 2) TIPOS DE RLog:
+
+## A) REGRECIÓN ESCALONADA
+
+```{r}
+library (ggpubr)
+library (dplyr)
+
+# Cargar y filtrar los datos (solo predictores numéricos)
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  select (-c("cyl", "vs", "gear", "carb") ) |>
+  mutate (am = factor (am, levels = c(1, 0), labels = c("manual", "automatico")))
+
+# Separar los conjuntos de entrenamiento y prueba
+set.seed (101)
+n <- nrow (datos)
+i_muestra <- sample.int (n = n, size = floor (0.7 * n), replace = FALSE)
+datos_ent <- datos [i_muestra, ]
+datos_pru <- datos [-i_muestra, ]
+
+#--------------------------------------------------------------------------------------
+# Construir los Modelos nulo y completo
+nulo <- glm(am ~ 1, family = binomial (link = "logit"), data = datos_ent)
+comp <- glm(am ~ ., family = binomial (link = "logit"), data = datos_ent)
+
+# Ajustar y mostrar un modelo con regresión paso a paso escalonada
+modelo <- step (nulo, scope = list (upper = comp),
+                direction = "both", trace = FALSE)
+
+cat ("\nModelo RLog conseguido con regresión escalonada:\n")
+cat ("-----------------------------------------------\n")
+print (summary (modelo))
+```
+
+## B) PASO A PASO HACIA ADELANTE
+
+```{r}
+library (ggpubr)
+library (dplyr)
+
+# Imprimir mensajes de advertencia a medida que ocurren, más cortos
+opt <- options (warn = 1, width = 26)
+
+# Cargar y filtrar los datos (solo predictores numéricos)
+datos <- mtcars |> filter (wt > 2 & wt < 5) |>
+  select (-c("cyl", "vs", "gear", "carb") ) |>
+  mutate (am = factor (am, levels = c(1, 0), labels = c("manual", "automatico")))
+
+# Separar conjuntos de entrenamiento y prueba
+set.seed (101)
+n <- nrow (datos)
+i_muestra <- sample.int (n = n, size = floor (0.7 * n), replace = FALSE)
+datos_ent <- datos [i_muestra, ]
+datos_pru <- datos [-i_muestra, ]
+
+# Definir modelos inicial y máximo
+nulo <- glm (am ~ 1, family = binomial (link = "logit"), data = datos_ent)
+maxi <- glm (am ~ ., family = binomial (link = "logit"), data = datos_ent)
+
+#---------------------------------------------------------------------------------------
+# Revisar un paso hacia adelante
+cat("\nPaso 1:\n ------\n")
+print (add1(nulo, scope = maxi))
+
+# Actualizar el modelo
+modelo1 <- update(nulo, . ~ . + wt)
+#------------------------------------
+# Revisar un paso hacia adelante
+cat ("\nPaso 2:\n ------\n")
+print(add1(modelo1, scope = maxi))
+
+# Actualizar el modelo
+modelo2 <- update (modelo1, . ~ . + mpg)
+#------------------------------------
+# Revisar un paso hacia adela
+cat("\nPaso 3:\n ------ \n")
+print(add1(modelo2, scope = maxi))
+
+# Reestabler la opción para warnings y ancho de la pantalla
+options (warn = opt [[1]], width = opt [[2]])
+#---------------------------------------------------------------------------------------
+# Mostrar el modelo obtenido
+modelo2_str <- capture.output (print (summary (modelo2)))
+cat ("\nModelo RLog conseguido con regresión hacia adelante:\n")
+cat ("------------------------------------------------------\n")
+write.table (modelo2_str [6:10], quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+# Comparar los modelos generados
+cat ("\nComparación de los modelos considerados:\n")
+cat ("------------------------------------------\n")
+print (anova(nulo, modelo1, modelo2, test = "LRT") )
+```
+
+## C) ANALISIS DE CONFIABILIDAD:
+
+### 1) Debe existir una relación lineal entre los predictores y la respuesta transformada. (APLICANDOLO PARA EL MODELO 2)
+
+```{r}
+library(car)        # Para VIF, durbinWatsonTest, crPlots, etc.
+library(ggplot2)    # Para gráficos
+library(dplyr)      # Para manipulación
+library(brglm2)     # Para detectar separación perfecta
+library(detectseparation)
+
+# Gráficos de componentes parciales
+crPlots(modelo2, terms = ~ mpg + wt,
+        id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+        col = "steelblue", pch = 19)
+
+# Gráfico de residuos
+residualPlots(modelo2, terms = ~ mpg + wt,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+               col = "steelblue", pch = 19, col.quad = "red", fitted = FALSE)
+```
+
+### 2) Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo2)
+```
+
+### 3) Multicolinealidad entre los predictores, que en este caso se evalúa y aborda del mismo modo que para RLM.
+
+```{r}
+vif(modelo2)
+```
+
+### 4) Información incompleta, que se produce cuando no contamos con observaciones suficientes para todas las posibles combinaciones de predictores, en especial para algún nivel de una variable categórica.
+
+```{r}
+# CANTIDAD DE OBSERVACIONES EN EL MODELO
+n_obs <- nrow(datos_ent)
+cat("Cantidad de observaciones en el modelo:", n_obs, "\n")
+
+# VERICAR QUE TODO VALOR NO SEA N/A
+cat("Cantidad de valores NA en el modelo:", sum(is.na(datos_ent)), "\n")
+
+# Verificar la cantidad de valores únicos por cada predictor numérico
+
+datos_ent |> group_by(am) |>
+  summarise(mpg_unique = n_distinct(mpg),
+            hp_unique = n_distinct(hp),
+            wt_unique = n_distinct(wt))
+```
+
+### 5) Separación perfecta, que ocurre cuando no hay superposición entre las clases
+
+#### OJO: RESPUESTA ANALIZANDO LOS GRAFICOS DE RECIDUOS!!
+
+### 6) Las estimaciones de los coeficientes del modelo no están dominadas por casos influyentes.
+
+```{r}
+# Desplegar gr á ficos de influencia .
+casos_influyentes <- influencePlot (modelo2 , id = list ( cex = 0.7) )
+#cat ("\nCasos que podrían ser influyentes:\n" )
+print ( casos_influyentes )
+```
+

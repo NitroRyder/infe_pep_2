@@ -1,0 +1,822 @@
+---
+title: "Untitled"
+author: "EJEMPLO"
+date: "2025-06-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1) Prueba de Yuen para dos muestras independientes
+
+## A) Ejecución registrado por dos algoritmos en diferentes instancias de igual tamaño y complejidad.
+
+```{r}
+library (ggpubr)
+library (WRS2)
+
+# Construir la matriz de datos
+a <- c(25.1, 25.2, 25.3, 25.3, 25.4, 25.4, 25.5, 25.5, 25.6, 25.8, 25.8,
+       25.9, 25.9, 26.0, 26.0, 26.2, 26.2, 26.2, 26.3, 26.4, 26.5, 26.5,
+       26.6, 26.7, 26.7, 26.9, 26.9, 27.0, 27.1, 27.3, 27.8, 28.4, 28.5,
+       29.0, 29.8, 30.2, 31.8, 31.9, 33.3, 33.7)
+
+b <- c(24.1, 24.4, 24.4, 24.5, 24.7, 24.8, 24.8, 25.1, 25.2, 25.2, 25.2,
+       25.3, 25.4, 25.7, 25.7, 26.3, 26.3, 26.4, 26.5, 27.2, 27.7, 28.3,
+       28.4, 28.4, 28.6, 28.7, 29.6, 29.9, 30.1, 30.5)
+
+Tiempo <- c(a, b)
+Algoritmo <- c(rep("A", length(a)), rep("B", length(b)))
+datos <- data.frame (Tiempo, Algoritmo)
+
+# Comprobar normalidad
+qq <- ggqqplot (datos, x = "Tiempo", facet.by = "Algoritmo",
+                palette = c("steelblue", "steelblue1"), color = "Algoritmo",
+                xlab = "Cuantil teórico", ylab = "Tiempo de ejecución [ms] ")
+
+qq <- qq + theme (legend.position = "none" )
+print (qq)
+```
+
+### a) APLANAMIENTO DEL MODELO:
+
+```{r}
+#--------------------------------------------------------------------------------
+# Aplicar una poda del 20% a las muestras
+gamma <- 0.2
+n_a <- length (a)
+n_b <- length (b)
+poda_a <- floor (n_a * gamma)
+poda_b <- floor (n_b * gamma)
+
+a_trunc <- a[poda_a: (n_a - poda_a)]
+b_trunc <- b[poda_b: (n_b - poda_b)]
+
+Tiempo_t <- c(a_trunc, b_trunc)
+Algoritmo_t <- c(rep("A", length(a_trunc)), rep("B", length(b_trunc)))
+datos_t <- data.frame (Tiempo_t, Algoritmo_t)
+
+qq_t <- ggqqplot (datos_t, x = "Tiempo_t", facet.by = "Algoritmo_t",
+                  palette = c("steelblue", "steelblue1"), color = "Algoritmo_t",
+                  xlab = "Cuantil teorico",
+                  ylab = "Tiempo de ejecución truncado [ms] ")
+
+qq_t <- qq_t + theme (legend.position = "none")
+print (qq_t)
+```
+### b) APLICAR LA PRUEBA DE YUEN PARA 2 MUESTRAS INDEPENDIENTES:
+
+```{r}
+yuen(formula = Tiempo ~ Algoritmo, data = datos, tr = gamma)
+```
+
+```{r}
+
+```
+
+## B) Prueba de Yuen para dos muestras independientes asintótica y usando bootstrapping.
+
+```{r}
+# Aplicar y mostrar la prueba de Yuen asintótica
+prueba <- yuen (Tiempo ~ Algoritmo, data = datos, tr = gamma)
+cat("\nPrueba de Yuen para dos muestras independientes\n")
+cat("--------------------------------------------------\n")
+print (prueba)
+
+# Establecer cantidad de repeticiones con bootstrapping
+B <- 999
+
+# Aplicar la prueba de Yuen con bootstrapping y la media
+set.seed (135)
+prueba_media <- pb2gen (Tiempo ~ Algoritmo, data=datos, est="mean", nboot=B)
+
+# Aplicar la prueba de Yuen con bootstrapping y la mediana
+set.seed (135)
+prueba_mediana <- pb2gen (Tiempo ~ Algoritmo, data=datos, est="median", nboot=B)
+
+# Mostrar los resultados
+cat ("\nPrueba de Yuen - implemetacion con bootstrapping\n")
+cat("=================================================\n")
+
+cat("\nResultado al usar bootstrapping y la media como estimador\n")
+cat("-----------------------------------------------------------\n")
+print (prueba_mediana)
+
+cat ("\nResultado al usar bootstrapping y la mediana como estimador\n")
+cat("-----------------------------------------------------------\n")
+print (prueba_media)
+```
+
+```{r}
+
+```
+
+# 2) Prueba de Yuen para dos muestras pareadas
+
+## A) Datos del tiempo de ejecución registrado por los algoritmos en las mismas instancias.
+
+```{r}
+library (ggpubr)
+library (WRS2)
+
+# Construir las estructuras con los datos observados
+a <- c(32.3, 32.0, 32.0, 36.0, 34.2, 32.7, 32.5, 32.0, 32.1, 33.4,
+       32.3, 37.2, 32.1, 32.0, 33.9, 34.1, 36.6, 34.5, 32.7, 33.1,
+       32.7, 32.1, 36.7, 32.2, 38.0)
+
+b <- c(35.3, 20.1, 18.6, 46.3, 42.1, 39.3, 37.0, 28.0, 30.2, 40.4,
+       35.6, 50.7, 33.6, 17.9, 41.0, 41.6, 47.8, 43.2, 38.3, 39.9,
+       38.0, 28.3, 48.4, 34.7, 52.9)
+
+dif <- a - b
+
+# Aplicar una poda del 20% al conjunto de diferencias
+gamma <- 0.2
+n <- length (dif)
+poda <- floor (n * gamma)
+dif <- sort (dif)
+dif_trunc <- dif [(poda + 1):(n - poda)]
+n_t <- length (dif_trunc)
+
+# Obtener graficos Q-Q de las diferencias originales y podadas
+datos <- data.frame (Diferencia = c(dif, dif_trunc),
+                      Muestra = c(rep("Original", n) , rep ("Podados", n_t) ) )
+
+qq <- ggqqplot (datos, x = "Diferencia", facet.by = "Muestra",
+                palette = c("steelblue", "steelblue1"), color = "Muestra",
+                xlab = "Cuantil teórico",
+                ylab = "Diferencias en tiemposnde ejecución [ms] ")
+
+qq <- qq + theme (legend.position = "none")
+print (qq)
+```
+
+## B) Prueba de Yuen para dos muestras pareadas
+
+```{r}
+# Aplicar y mostrar la prueba de Yuen para muestras apareadas
+gamma <- 0.2
+prueba <- yuend ( x = a , y = b , tr = gamma )
+cat (" Prueba de Yuen para dos muestras pareadas \n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - -\n")
+print ( prueba )
+
+```
+
+```{r}
+
+```
+
+# 3) Análisis robusto de una vía para muestras independientes
+
+```{r}
+library ( ggpubr )
+library ( WRS2 )
+
+# Construir las estructuras con los datos
+A <- c (25.1 , 25.2 , 25.3 , 25.3 , 25.4 , 25.4 , 25.5 , 25.5 , 25.6 , 25.8 , 25.8 ,
+        25.9 , 25.9 , 26.0 , 26.0 , 26.2 , 26.2 , 26.2 , 26.3 , 26.4 , 26.5 , 26.5 ,
+        26.6 , 26.7 , 26.7 , 26.9 , 26.9 , 27.0 , 27.1 , 27.3 , 27.8 , 28.4 , 28.5 ,
+        29.0 , 29.8 , 30.2 , 31.8 , 31.9 , 33.3 , 33.7)
+
+B <- c (24.1 , 24.4 , 24.4 , 24.5 , 24.7 , 24.8 , 24.8 , 25.1 , 25.2 , 25.2 , 25.2 ,
+        25.3 , 25.4 , 25.7 , 25.7 , 26.3 , 26.3 , 26.4 , 26.5 , 27.2 , 27.7 , 28.3 ,
+        28.4 , 28.4 , 28.6 , 28.7 , 29.6 , 29.9 , 30.1 , 30.5)
+
+C <- c (24.5 , 24.5 , 24.5 , 24.5 , 24.5 , 24.5 , 24.6 , 24.6 , 24.6 , 24.6 , 24.6 ,
+        24.6 , 24.7 , 24.7 , 24.7 , 24.7 , 24.8 , 25.0 , 25.0 , 25.0 , 25.2 , 25.2 ,
+        25.2 , 25.2 , 25.5 , 25.7 , 25.9 , 26.2 , 26.5 , 26.5 , 26.7 , 27.0 , 29.2 ,
+        29.9 , 30.1)
+
+Tiempo <- c(A , B , C )
+Algoritmo <- c(rep("A", length ( A ) ) , rep("B", length ( B ) ) , rep ("C", length ( C ) ) )
+Algoritmo <- factor ( Algoritmo )
+datos <- data.frame ( Tiempo , Algoritmo )
+
+# Obtener grá ficos Q-Q de las muestras
+qq <- ggqqplot ( datos , x = "Tiempo", facet.by = "Algoritmo", color = "Algoritmo",
+                 palette = c("steelblue", "steelblue1", "steelblue4") ,
+                 xlab = " Cuantil teórico ", ylab = " Tiempos\n de ejecución [ms]")
+
+qq <- qq + theme ( legend.position = "none")
+print ( qq )
+
+```
+
+## A) Análisis robusto de una vía para comparar muestras independientes.
+
+
+```{r}
+# Fijar nivel de significaci ón, nivel de poda y nro . de iteraciones bootstrap
+alfa <- 0.05
+gamma <- 0.2
+nboot <- 999
+
+# Comparar los diferentes algoritmos usando medias truncadas
+set.seed (666)
+una_via <- t1way ( Tiempo ~ Algoritmo , data = datos ,
+                   tr = gamma , alpha = alfa , nboot = nboot )
+
+cat ("Análisis de una vía para muestras independientes ( asimpótico )\n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - -\n")
+print ( una_via )
+
+if( una_via [["p.value"]] < alfa ) {
+  una_via_ph <- lincon ( Tiempo ~ Algoritmo , data = datos ,
+                         tr = gamma , alpha = alfa )
+
+  cat ("Análisis post-hoc para muestras independientes ( asimpótico )\n")
+  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - -\n")
+  print ( una_via_ph )
+}
+
+```
+
+## B) Análisis robusto de una vía para muestras independientes aplicando bootstrapping.
+
+```{r}
+# Comparar los diferentes algoritmos usando medias truncadas y bootstrapping
+set.seed (666)
+una_via_bt <- t1waybt ( Tiempo ~ Algoritmo , data = datos ,
+                        tr = gamma , nboot = nboot )
+
+cat ("Análisis de una vía para muestras independientes ( bootstrapped )\n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - -\n")
+print ( una_via_bt )
+
+if( una_via_bt [["p.value"]] < alfa ) {
+  set.seed (666)
+  una_via_bt_ph <- mcppb20 ( Tiempo ~ Algoritmo , data = datos ,
+                             tr = gamma , nboot = nboot )
+
+  cat ("Análisis post-hoc para muestras independientes ( bootstrapped )\n")
+  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - -\n")
+  print ( una_via_bt_ph )
+}
+
+```
+
+# 4) Análisis robusto de una vía para muestras correlacionadas
+
+## A) Diferencias en los tiempo de ejecución registrados por tres algoritmos en las mismas instancias.
+
+```{r}
+library ( dplyr )
+library ( ggpubr )
+library ( tidyr )
+library ( WRS2 )
+
+ # Construir las estructuras con los datos
+A <- c (32.0 , 32.0 , 32.0 , 32.0 , 32.1 , 32.1 , 32.1 , 32.2 , 32.3 , 32.3 , 32.5 ,
+        32.7 , 32.7 , 32.7 , 33.1 , 33.4 , 33.9 , 34.1 , 34.2 , 34.5 , 36.0 , 36.6 ,36.7 , 37.2 , 38.0)
+
+B <- c (33.0 , 33.0 , 33.0 , 33.0 , 33.0 , 33.0 , 33.3 , 33.3 , 33.3 , 33.3 , 33.5 , 
+        33.6 , 33.7 , 33.9 , 33.9 , 34.2 , 34.2 , 34.3 , 34.3 , 34.4 , 34.5 , 34.6 ,36.4 , 38.9 , 40.2)
+
+C <- c (32.0 , 32.2 , 32.5 , 32.6 , 32.7 , 32.7 , 32.7 , 33.0 , 33.2 , 33.4 , 33.6 , 
+        33.6 , 33.9 , 34.1 , 34.2 , 34.4 , 34.4 , 34.5 , 34.6 , 34.7 , 36.3 , 36.6 , 36.7 , 38.9 , 39.2)
+
+Instancia <- factor (1: length ( A ) )
+datos_anchos <- data.frame ( Instancia , A , B , C )
+dif_anchos <- data.frame ( A_B = A - B , A_C = A - C , B_C = B - C )
+
+# Llevar las matrices de datos a formato largo
+datos <- datos_anchos |>
+  pivot_longer (c("A", "B", "C") , names_to = "Algoritmo", values_to = "Tiempo") |>
+   mutate ( Algoritmo = factor ( Algoritmo ) )
+
+dif <- dif_anchos |>
+  pivot_longer ( everything() , names_to = "Algoritmos", values_to = "Diferencia") |>
+  mutate ( Algoritmos = factor ( Algoritmos ))
+
+# Obtener grá ficos Q-Q de las diferencias
+qq <- ggqqplot ( dif , x = "Diferencia", facet.by = "Algoritmos",
+                 color = "Algoritmos",
+                 palette = c("steelblue", "steelblue1", "steelblue4") ,
+                 xlab = "Cuantilteórico",
+                 ylab = "Diferencias en tiempos \n de ejecuci ón [ms]")
+
+qq <- qq + theme ( legend.position = "none")
+print ( qq )
+
+```
+
+## B) Análisis robusto de una vía para muestras correlacionadas.
+
+```{r}
+# Fijar nivel de significaci ón y nivel de poda
+alfa <- 0.05
+gamma <- 0.2
+
+# Comparar los algoritmos usando medias truncadas de las diferencias
+mr_rob <- rmanova ( y = datos [["Tiempo"]] , groups = datos [["Algoritmo"]] ,
+                    blocks = datos [["Instancia"]] , tr = gamma )
+
+cat ("Análisis de una vía para medidas repetidas ( asimpótico )\n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- -\n")
+print ( mr_rob )
+
+if( mr_rob [["p.value"]] < alfa ) {
+  mr_rob_ph <- rmmcp ( y = datos [["Tiempo"]] , groups = datos [["Algoritmo"]] ,
+                       blocks = datos [["Instancia"]] , tr = gamma , alpha = alfa )
+
+  cat ("Análisis post-hoc para medidas repetidas ( asimpótico )\n")
+  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -\n")
+  print ( mr_rob_ph )
+}
+```
+
+## C)  Análisis robusto de una vía para muestras correlacionadas usando bootstrapping.
+
+```{r}
+# Fijar la cantidad de iteraciones bootstrap
+nboot <- 999
+
+# Comparar los algoritmos usando diferencias truncadas y bootstrapping
+set.seed (666)
+mr_bt <- rmanovab ( y = datos [["Tiempo"]] , groups = datos [["Algoritmo"]] ,
+blocks = datos [["Instancia"]] , tr = gamma , nboot = nboot )
+
+cat ("Análisis de una vía para medidas repetidas ( bootstrapped )\n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - -\n")
+print ( mr_bt )
+
+if( mr_bt [["test"]] > mr_bt [["crit"]]) {
+  set.seed (666)
+  mr_bt_ph <- pairdepb ( y = datos [["Tiempo"]] , groups = datos [["Algoritmo"]] ,
+  blocks = datos [["Instancia"]] , tr = gamma , nboot = nboot )
+  
+  cat ("Análisis post -hoc para medidas repetidas ( bootstrapped )\n")
+  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- -\n")
+  print ( mr_bt_ph )
+}
+```
+
+# ------------------------------------------------------------------------------
+
+# 1) Bootstrapping para una muestra
+
+## A) Construcción de un intervalo de confianza para la media poblacional mediante bootstrapping:
+
+```{r}
+library ( boot )
+library ( bootES )
+
+# Crear muestra inicial , mostrar su histograma y calcular la media
+muestra <- c(79 , 75 , 84 , 75 , 94 , 82 , 76 , 90 , 79 , 88)
+
+# Establecer cantidad de remuestreos y nivel de significaci ón
+B <- 2000
+alfa <- 0.01
+
+# Funci ón para calcular el estad í stico : media de la remuestra
+media <- function ( valores , i ) {
+  mean ( valores [ i ])
+}
+
+# Construir la distribuci ón bootstrap usando el paquete boot
+set.seed (432)
+distribucion_b <- boot ( muestra , statistic = media , R = B )
+
+# Mostrar y graficar la distribuci ón bootstrap
+print ( distribucion_b )
+plot ( distribucion_b )
+
+# Construir y mostrar los intervalos de confianza
+ics <- boot.ci( distribucion_b , conf = 1 - alfa ,
+                type = c("norm", "perc", "bca") )
+
+cat ("\n\n")
+print ( ics )
+```
+
+## B) Uso de la función bootES() para aplicar bootstrapping al ejemplo.
+
+```{r}
+# Construir la distribuci ón bootstrap usando el paquete bootES
+# ( esta llamada adem ás calcula ( solo ) un intervalo de confianza
+# y grafica la distribuci ón bootstrap ).
+set.seed (432)
+distribucion_bES <- bootES ( muestra , R = B , ci.type = "bca",
+                             ci.conf = 1 - alfa , plot = TRUE )
+
+# Mostrar bootstrap obtenida con bootES
+print ( distribucion_bES )
+
+```
+
+## C) Obtención del valor p basado en bootstrapping para el ejemplo.
+
+```{r}
+# Desplazar la distribuci ón bootstrap para que se centre en el valor nulo
+valor_nulo <- 75
+desplazamiento <- mean ( distribucion_b [["t"]]) - valor_nulo
+distribucion_nula <- distribucion_b [["t"]] - desplazamiento
+
+# Determinar y mostrar la media observada y el valor p
+valor_observado <- media ( muestra , 1: length ( muestra ) )
+
+p <- ( sum ( distribucion_nula > valor_observado ) + 1) / (B + 1)
+cat ("Media observada :", valor_observado , "\n")
+cat ("Valor p:", p , "\n")
+
+```
+
+```{r}
+
+```
+
+# 2) Bootstrapping para dos muestras independientes
+
+## A) Cootstraping para la diferencia de dos medias del ejemplo.
+
+```{r}
+library ( boot )
+library ( ggpubr )
+library ( simpleboot )
+
+# Definir las muestras obtenidas
+hombres <- c(1.3 , 1.5 , 1.6 , 1.7 , 1.7 , 1.9 , 2.3 , 2.4 , 2.6 , 2.6 , 2.7 , 2.8 , 3.2 , 3.7 ,
+             4.1 , 4.4 , 4.5 , 4.8 , 5.2 , 5.2 , 5.3 , 5.5 , 5.5 , 5.6 , 5.6 , 5.7 , 5.7)
+
+mujeres <- c(3.5 , 3.6 , 3.8 , 4.3 , 4.5 , 4.5 , 4.9 , 5.1 , 5.3 , 5.3 , 5.5 ,
+             5.8 , 6.0 , 6.3 , 6.3 , 6.4 , 6.4 , 6.6 , 6.7)
+
+n_hombres <- length ( hombres )
+n_mujeres <- length ( mujeres )
+
+# Comprobar la normalidad de las muestras
+print ( shapiro.test ( hombres ) )
+print ( shapiro.test ( mujeres ) )
+
+# Calcular y mostrar la diferencia observada entre las medias muestrales
+media_hombres <- mean ( hombres )
+media_mujeres <- mean ( mujeres )
+diferencia_obs <- media_hombres - media_mujeres
+
+cat ("Media hombres :", round ( media_hombres ,3) , "\n")
+cat ("Media mujeres :", round ( media_mujeres ,3) , "\n")
+cat ("Diferencia observada :", round ( diferencia_obs , 3) , "\n\n")
+
+# Crear la distribuci ón bootstrap
+B <- 9999
+set.seed (432)
+distribucion_b <- two.boot ( hombres , mujeres , FUN = mean , R = B )
+
+# Examinar la distribuci ón bootstrap
+datos <- data.frame ( diferencias = distribucion_b [["t"]])
+g_hist <- gghistogram ( datos , x = "diferencias", bins = 100 ,
+                        xlab = "Diferencia de medias", ylab = "Frecuencia")
+
+g_qq <- ggqqplot ( datos , x = "diferencias")
+g <- ggarrange ( g_hist , g_qq )
+print ( g )
+
+media_b <- mean ( datos [["diferencias"]])
+sd_b <- sd( datos [["diferencias"]])
+
+cat ("Distribución bootstrap :\n")
+cat ("\ tMedia :", round ( media_b , 3) , "\n")
+cat ("\ tDesviación estándar :", round (sd_b , 3) , "\n\n")
+
+# Construir y mostrar los intervalos de confianza
+alfa <- 0.05
+intervalo_bca <- boot.ci( distribucion_b , conf = 1 - alfa , type = "bca")
+print ( intervalo_bca )
+
+# Desplazar la distribuci ón bootstrap para reflejar la hipó tesis nula
+valor_nulo <- -0.5
+desplazamiento <- media_b - valor_nulo
+distribucion_nula <- datos [["diferencias"]] - desplazamiento
+
+# Determinar y mostrar el valor p
+p <- ( sum ( distribucion_nula < diferencia_obs ) + 1) / ( B + 1)
+cat ("\ nValor p:", p , "\n")
+
+```
+
+```{r}
+
+```
+
+# 3) Bootstrapping para dos muestras apareadas
+
+```{r}
+library ( bootES )
+
+set.seed (432)
+
+#Ingresar datos originales .
+prueba_1 <- c(3.5 , 2.7 , 1.0 , 1.8 , 1.6 , 4.3 , 5.8 , 6.4 , 3.9 , 4.3 , 3.4 ,
+               5.3 , 5.8 , 5.3 , 2.0 , 1.3 , 4.0 , 5.3 , 1.6 , 3.6)
+
+prueba_2 <- c(5.2 , 5.1 , 5.9 , 4.8 , 1.4 , 2.3 , 6.8 , 5.3 , 3.1 , 3.8 , 4.6 ,
+               1.2 , 3.9 , 2.0 , 1.7 , 3.3 , 6.0 , 4.8 , 6.9 , 1.3)
+
+# Calcular la diferencia entre ambas observaciones .
+diferencia <- prueba_2 - prueba_1
+
+# Calcular la media observada de las diferencias .
+valor_observado <- mean ( diferencia )
+
+# Generar la distribuci ón bootstrap y su intervalo de confianza .
+B <- 3999
+alfa <- 0.05
+
+distribucion_bES <- bootES ( diferencia , R = B , ci.type = "bca",
+                             ci.conf = 1 - alfa , plot = FALSE )
+
+# Desplazar la distribuci ón bootstrap para reflejar la hipó tesis nula .
+valor_nulo <- 0.5
+desplazamiento <- mean ( distribucion_bES [["t"]]) - valor_nulo
+distribucion_nula <- distribucion_bES [["t"]] - desplazamiento
+
+# Determinar el valor p.
+p <- ( sum ( abs( distribucion_nula ) > abs( valor_observado ) ) + 1) / ( B + 1)
+
+# Mostrar los resultados
+cat (" Media de las diferencia observada :", round ( valor_observado , 3) , "\n\n")
+cat (" Distribuci ón bootstrap e intervalo de confianza :\n")
+print ( distribucion_bES )
+cat (" Valor p:", round (p , 3) , "\n")
+
+```
+
+```{r}
+
+```
+
+# 4) Pruebas de permutaciones 
+
+```{r}
+library ( ggpubr )
+
+# Definir las muestras iniciales
+a <- c(5.4 , 4.7 , 6.3 , 2.9 , 5.9 , 5.1 , 2.1 , 6.2 , 1.6 , 6.7 , 3.0 , 3.3 ,
+       5.0 , 4.1 , 3.3 , 3.4 , 1.2 , 3.8 , 5.8 , 4.2)
+
+b <- c(4.0 , 4.1 , 4.3 , 4.3 , 4.3 , 4.2 , 4.3 , 4.3 , 4.4 , 4.1 , 4.3 , 4.0)
+
+# Establecer semilla y cantidad de repeticiones
+R = 5999
+set.seed (432)
+
+# Funci ón para obtener una permutaci ón.
+# Argumentos :
+# - i: iterador ( para llamadas posteriores ).
+# - muestra _1 , muestra _2: muestras .
+# Valor :
+# - lista con las muestras resultantes tras la permutaci ón.
+obtiene_permutacion <- function (i , muestra_1 , muestra_2) {
+  n_1 <- length ( muestra_1)
+  combinada <- c( muestra_1 , muestra_2)
+  n <- length ( combinada )
+  permutacion <- sample ( combinada , n , replace = FALSE )
+  nueva_1 <- permutacion [1: n_1]
+  nueva_2 <- permutacion [( n_1 +1) : n ]
+  
+  return ( list ( nueva_1 , nueva_2) )
+}
+
+# Funci ón para calcular la diferencia de un estad í stico de inter és entre las
+# dos muestras .
+# Argumentos :
+# - muestras : lista con las muestras .
+# - FUN : nombre de la funci ón que calcula el estad í stico de inter és.
+# Valor :
+# - diferencia de un estad í stico para dos muestras .
+calcular_diferencia <- function ( muestras , FUN ) {
+  muestra_1 <- muestras [[1]]
+  muestra_2 <- muestras [[2]]
+  diferencia <- FUN ( muestra_1) - FUN ( muestra_2)
+  
+  return ( diferencia )
+}
+
+# Funci ón para calcular el valor p.
+# Argumentos :
+# - distribucion : distribuci ón nula del estad í stico de inter és.
+# - valor _ observado : valor del estad í stico de inter és para las muestras
+# originales .
+# - repeticiones : cantidad de permutaciones a realizar .
+# - alternative : tipo de hipó tesis alternativa . "two. sided " para
+# hip ó tesis bilateral , " greater " o " less " para hip ó tesis unilaterales .
+# Valor :
+# - el valorp calculado .
+calcular_valor_p <- function ( distribucion , valor_observado , repeticiones , alternative ) {
+  if( alternative == "two.sided") {
+    numerador <- sum(abs( distribucion ) > abs ( valor_observado ) ) + 1
+    denominador <- repeticiones + 1
+    valor_p <- numerador / denominador
+  }
+  else if( alternative == "greater") {
+    numerador <- sum( distribucion > valor_observado ) + 1
+    denominador <- repeticiones + 1
+    valor_p <- numerador / denominador
+  }
+  else {
+    numerador <- sum( distribucion < valor_observado ) + 1
+    denominador <- repeticiones + 1
+    valor_p <- numerador / denominador
+  }
+  
+  return ( valor_p )
+}
+
+# Funci ón para graficar una distribuci ón.
+# Argumentos :
+# - distribucion : distribuci ón nula del estad í stico de inter és.
+# - ...: otros argumentos a ser entregados a gghistogram y ggqqplot .
+graficar_distribucion <- function ( distribucion , ...) {
+  observaciones <- data.frame ( distribucion )
+  
+  histograma <- gghistogram ( observaciones , x = "distribucion",
+                              xlab = "Estadístico de interés",
+                              ylab = "Frecuencia", bins = 30 , ...)
+  
+  qq <- ggqqplot ( observaciones , x = "distribucion", ...)
+  
+  # Crear una ú nica figura con todos los grá ficos de dispersi ón.
+  figura <- ggarrange ( histograma , qq , ncol = 2 , nrow = 1)
+  print ( figura )
+}
+
+# Funci ón para hacer la prueba de permutaciones .
+# Argumentos :
+# - muestra _1 , muestra _2: vectores num é ricos con las muestras a comparar .
+# - repeticiones : cantidad de permutaciones a realizar .
+# - FUN : funci ón del estad í stico E para el que se calcula la diferencia .
+# - alternative : tipo de hipó tesis alternativa . "two. sided " para
+# hip ó tesis bilateral , " greater " o " less " para hip ó tesis unilaterales .
+# - plot : si es TRUE , construye el grá fico de la distribuci ón generada .
+# - ...: otros argumentos a ser entregados a graficar _ distribucion .
+contrastar_hipotesis_permutaciones <- function ( muestra_1 , muestra_2, repeticiones , FUN , alternative , plot , ...) {
+cat ("Prueba de permutaciones \n\n")
+cat ("Hipótesis alternativa:", alternative , "\n")
+observado <- calcular_diferencia ( list ( muestra_1 , muestra_2) , FUN )
+cat ("Valor observado:", observado , "\n")
+
+# Generar permutaciones
+n_1 <- length ( muestra_1)
+permutaciones <- lapply (1: repeticiones , obtiene_permutacion , muestra_1 , muestra_2)
+
+# Generar la distribuci ón
+distribucion <- sapply ( permutaciones , calcular_diferencia , FUN )
+
+# Graficar la distribuci ón
+if( plot ) {
+  graficar_distribucion ( distribucion , ...)
+}
+
+# Calcular y mostrar el valor p
+valor_p <- calcular_valor_p( distribucion , observado , repeticiones , alternative )
+
+  cat ("Valor p:", valor_p , "\n\n")
+}
+
+
+# ----- Bloque principal -----
+
+# Hacer pruebas de permutaciones para la media y la varianza
+contrastar_hipotesis_permutaciones (a , b , repeticiones = R , FUN = mean ,
+                                    alternative = "two. sided", plot = TRUE ,
+                                    color = "blue", fill = "blue")
+
+contrastar_hipotesis_permutaciones (a , b , repeticiones = R , FUN = var ,
+                                    alternative = "two.sided", plot = FALSE )
+```
+
+```{r}
+
+```
+
+# 5) Prueba de permutaciones para comparar más de dos muestras correlacionadas
+
+```{r}
+library ( ez )
+library ( ggpubr )
+library ( tidyr )
+
+# Crear la matriz de datos
+Algoritmos <- c("Quicksort", "Bubblesort", "Mergesort")
+Quicksort <- c(11.2 , 22.6 , 23.4 , 23.3 , 21.8 , 40.1)
+Bubblesort <- c(15.7 , 29.3 , 30.7 , 30.8 , 29.8 , 50.3)
+Mergesort <- c(12.0 , 25.7 , 25.7 , 23.7 , 25.5 , 44.7)
+Instancia <- factor (1:6)
+
+datos_anchos <- data.frame ( Instancia , Quicksort , Bubblesort , Mergesort )
+
+datos_largos <- datos_anchos |>
+  pivot_longer ( all_of ( Algoritmos ) ,
+                 names_to = "Algoritmo",
+                 values_to = "Tiempo")
+
+datos_largos [["Algoritmo"]] <- factor ( datos_largos [["Algoritmo"]] ,
+                                         levels = Algoritmos )
+
+# Verificar la condici ón de normalidad
+g <- ggqqplot ( datos_largos , "Tiempo", facet.by = "Algoritmo",
+                color = "Algoritmo")
+print ( g )
+ 
+# Establecer nivel de significaci ón
+alfa <- 0.01
+
+# Obtener el valor observado , correspondiente al estad í stico F entregado
+# por ANOVA para la muestra original .
+anova <- ezANOVA ( datos_largos , dv = Tiempo , within = Algoritmo , wid = Instancia )
+valor_observado <- anova [["ANOVA" ]][[ "F"]]
+
+# Funci ón para obtener una permutaci ón;
+# devuelve una matriz de datos con formato ancho .
+obtiene_permutacion <- function (i , df_ancho ) {
+  df_ancho [ , 2:4] <- t( apply ( df_ancho [ , 2:4] , 1 , sample ) )
+  return ( df_ancho )
+}
+
+# Obtiene permutaciones
+R = 2999
+set.seed (432)
+permutaciones <- lapply (1: R , obtiene_permutacion , datos_anchos )
+
+# Funci ón para obtener el estad í stico F para una matriz de datos con
+# formato ancho .
+obtiene_F <- function ( df_ancho ) {
+df_largo <- df_ancho |>
+  pivot_longer (c("Quicksort", "Bubblesort", "Mergesort") ,
+                names_to = "Algoritmo",
+                values_to = "Tiempo")
+
+df_largo [["Algoritmo"]] <- factor ( df_largo [["Algoritmo"]])
+
+anova <- ezANOVA ( df_largo , dv = Tiempo , within = Algoritmo , wid = Instancia )
+  return ( anova [["ANOVA" ]][[ "F"]])
+}
+
+# Genera distribuci ón de estad í sticos F con las permutaciones
+distribucion <- sapply ( permutaciones , obtiene_F )
+
+# Obtener y mostrar el valor p
+p <- ( sum ( distribucion > valor_observado ) + 1) / ( R + 1)
+cat (" ANOVA de una vía para muestras pareadas con permutaciones :\n")
+cat (" Valor p ómnibus :", p, "\n")
+
+# Análisis post -hoc
+
+# Funci ón para calcular la media de las diferencias para dos columnas de una
+# matriz de datos en formato ancho .
+obtiene_media_difs <- function ( df_ancho , columna_1 , columna_2) {
+  media <- mean ( df_ancho [[ columna_1]] - df_ancho [[ columna_2]])
+  return ( media )
+}
+
+# Obtiene las las medias de las diferencias observadas
+dif_obs_Q_B <- obtiene_media_difs ( datos_anchos , "Quicksort", "Bubblesort")
+dif_obs_Q_M <- obtiene_media_difs ( datos_anchos , "Quicksort", "Mergesort")
+dif_obs_B_M <- obtiene_media_difs ( datos_anchos , "Bubblesort", "Mergesort")
+
+# Obtiene las distribuciones de las medias de las diferencias permutadas
+dist_medias_difs_Q_B <- sapply ( permutaciones , obtiene_media_difs , "Quicksort", "Bubblesort")
+
+dist_medias_difs_Q_M <- sapply ( permutaciones , obtiene_media_difs , "Quicksort", "Mergesort")
+
+dist_medias_difs_B_M <- sapply ( permutaciones , obtiene_media_difs , "Bubblesort", "Mergesort")
+
+# Obtener valores p
+num <- sum (abs( dist_medias_difs_Q_B ) > abs( dif_obs_Q_B ) ) + 1
+den <- R + 1
+p_Q_B <- num / den
+
+num <- sum (abs( dist_medias_difs_Q_M ) > abs( dif_obs_Q_M ) ) + 1
+den <- R + 1
+p_Q_M <- num / den
+
+num <- sum (abs( dist_medias_difs_B_M ) > abs( dif_obs_B_M ) ) + 1
+den <- R + 1
+p_B_M <- num / den
+
+valores_p <- c(p_Q_B , p_Q_M , p_B_M )
+
+# Ajustar y mostrar valores p
+valores_p_adj <- p.adjust ( valores_p, method = "BH")
+
+cat ("\n\n")
+cat ("Aná lisis post -hoc ( permutaciones ) para la diferencia de las medias \n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - -\n")
+cat (" Valores p ajustados :\n")
+cat ( sprintf (" Quicksort - Bubblesort : %.3f\n", valores_p_adj [1]) )
+cat ( sprintf (" Quicksort - Mergesort : %.3f\n", valores_p_adj [2]) )
+cat ( sprintf (" Bubblesort - Mergesort : %.3f\n", valores_p_adj [3]) )
+
+cat ("\ nDiferencias observadas :\n")
+cat ( sprintf (" Quicksort - Bubblesort : %6.3f\n", dif_obs_Q_B ) )
+cat ( sprintf (" Quicksort - Mergesort : %6.3f\n", dif_obs_Q_M ) )
+cat ( sprintf (" Bubblesort - Mergesort : %6.3f\n", dif_obs_B_M ) )
+
+```
+
+```{r}
+
+```
