@@ -1,0 +1,688 @@
+---
+title: "EP11-respuesta-equipo-2"
+author: "EJEMPLO"
+date: "2025-06-12"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(carData)
+library(ggplot2)
+library(GGally)
+library(caret)
+library(dplyr)
+library(car)
+library(carData)
+library(ggpubr)
+library(leaps)
+library(pROC)
+```
+
+# LECTURA DE ARCHIVO
+
+```{r}
+datos <- read.csv2("EP09 Datos.csv")
+```
+
+# PREGUNTAS:
+
+### Pregunta 1
+
+> Definir la semilla a utilizar, que corresponde a los primeros cinco
+> dígitos del RUN del integrante de mayor edad del equipo.
+
+```{r}
+set.seed(21063)
+```
+
+### Pregunta 2
+
+> Seleccionar una muestra de 100 personas, asegurando que la mitad tenga
+> estado nutricional “sobrepeso” y la otra mitad “no sobrepeso”.
+
+```{r}
+ICM <- datos$Weight / ((datos$Height * 0.01)^2)
+datos_con_ICM <- cbind(datos, ICM)
+
+datos_con_ICM <- datos_con_ICM %>% 
+  mutate(EN = factor(ifelse(ICM >= 23.2, "sobrepeso", "no sobrepeso"), 
+                     levels = c("no sobrepeso", "sobrepeso")))
+
+mitad_sobrepeso <- datos_con_ICM %>% 
+  filter(ICM >= 23.2) %>% 
+  sample_n(50, replace = FALSE)
+
+mitad_no_sobrep <- datos_con_ICM %>% 
+  filter(ICM < 23.2) %>% 
+  sample_n(50, replace = FALSE)
+
+
+grup_entrenamiento <- rbind(mitad_sobrepeso, mitad_no_sobrep)  %>% sample_frac(1L)
+```
+
+### Pregunta 3
+
+> Usando las herramientas del paquete leaps, realizar una búsqueda
+> exhaustiva para seleccionar entre dos y ocho predictores que ayuden a
+> estimar la \> variable Peso (Weight), obviamente sin considerar las
+> nuevas variables IMC ni EN, y luego utilizar las funciones del paquete
+> caret para construir \> un modelo de regresión lineal múltiple con los
+> predictores escogidos y evaluarlo usando bootstrapping.
+
+```{r}
+
+datos <- grup_entrenamiento[, !(names(grup_entrenamiento) %in% c("ICM", "EN"))]
+
+# Se realiza búsqueda exhaustiva para los predictores
+modelo_subset <- regsubsets(Weight ~ ., data = datos, nvmax = 8, method = "exhaustive")
+resumen_subset <- summary(modelo_subset)
+print(resumen_subset$which)
+
+# Selecciona los mejores predictores según el bic (hay que tomar el menor valor para tener el mejor modelo)
+mejor_modelo <- which.min(resumen_subset$bic)
+mejores_predictores <- names(which(resumen_subset$which[mejor_modelo, ]))[-1]
+print(mejores_predictores)
+
+# Formula con los mejores predictores
+formula <- as.formula(paste("Weight ~", paste(mejores_predictores, collapse = " + ")))
+
+# Definir control de entrenamiento con bootstrap
+control <- trainControl(method = "boot", number = 1000)  # 1000 muestras bootstrap
+
+# Entrenar modelo
+set.seed(21063)
+modelo_final <- train(formula, data = datos, method = "lm", trControl = control)
+
+# Resumen del modelo
+print(modelo_final)
+summary(modelo_final$finalModel)
+```
+
+Los valores entregados por bootstrapping indican que el modelo es
+robusto y confiable, un R\^2 de 0.978 implica que el modelo explica el
+97.8% de la variabilidad de la variable Peso (Weight) en los datos de
+entrenamiento.
+
+Analizando los predictores, cada uno tiene un coeficiente
+estadísticamente significativo, esto es que el valor p es menor a 0.05,
+lo que indica que cada predictor contribuye al modelo.
+
+### Análisis de confianza del modelo:
+
+> 1.  La variable de respuesta debe ser cuantitativa y continua, sin
+>     restricciones para su variabilidad.
+
+```{r}
+str(grup_entrenamiento$Weight)
+```
+
+Se cumple con este punto, ya que la variable de respuesta es
+cuantitativa y continua.
+
+Por ende, se cumple con esta condición.
+
+> 2.  Los predictores deben ser cuantitativos o dicotómicos (de ahí la
+>     necesidad de variables indicadoras para manejar más de dos
+>     niveles).
+
+```{r}
+str(grup_entrenamiento[, c("Elbows.diameter", "Chest.Girth", "Waist.Girth", "Thigh.Girth", "Calf.Maximum.Girth", "Height")])
+```
+
+Se cumple este punto, ya que los predictores son cuantitativos y no hay
+variables dicotómicas.
+
+Por ende, se cumple con esta condición.
+
+> 3.  Los predictores deben tener algún grado de variabilidad (su
+>     varianza no debe ser igual a cero). En otras palabras, no pueden
+>     ser constantes.
+
+```{r}
+apply(grup_entrenamiento[, c("Elbows.diameter", "Chest.Girth", "Waist.Girth", "Thigh.Girth", "Calf.Maximum.Girth", "Height")], 2, stats::var)
+```
+
+Como es posible observar, la varianza de cada caso son mayores que 0.
+
+Por ende, se cumple con esta condición.
+
+#### Para la realización de los pasos 4, 5 y 6 es necesaria la siguiente linea de código:
+
+```{r}
+# Ajustar el modelo directamente con Im para diagnóstico
+modelo_lm <- lm(Weight ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height, data = grup_entrenamiento)
+
+# Gráfico de residuos
+residualPlots(modelo_lm, terms = ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+              col = "steelblue", pch = 19, col.quad = "red")
+
+# Gráficos marginales
+marginalModelPlots (modelo_lm, sd = TRUE, terms = ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height,
+                    id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+                    col = "steelblue", pch = 20, col.line = c("blue", "red"))
+
+mmps(modelo_lm, id = list(method = "r", n = 3, cex = 0.7, location = "lr"), col = "steelblue", pch = 20, col.line = c("blue", "red"))
+
+# Grafico reciduos parciales
+crPlots(modelo_lm, terms = ~ Elbows.diameter + Chest.Girth + Waist.Girth + Thigh.Girth + Calf.Maximum.Girth + Height,
+          id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+          col = "steelblue", pch = 20, col.line = c("blue", "red"))
+```
+
+> 4.  Cada predictor debe estar relacionado linealmente con la
+>     respuesta.
+
+Como es posible observar en los valores p obtenidos en el análisis de
+residuos, los predictores "Thigh.Girth", "Calf.Maximum.Girth" y "Height"
+presentan valores mayores a un nivel de significancia de 0.05, por ende
+no tienen evidencia contra la linealidad.
+
+En contraste, los predictores "Elbows.diameter", "Chest.Girth" y
+"Waist.Girth" presentan valores p menores a 0.05, rechazando linealidad
+en su relación de la variable dependiente "Weight".
+
+Además, el valor de Tukey test global es de 0.0003863, lo que indica que
+al menos uno de los predictores no está linealmente relacionado con la
+variable "Weight".
+
+Esta conclusión también se ve reforzada por la parecencia de curvatura
+en los gráficos de residuos.
+
+Por ende, no se cumple con esta condición.
+
+> 5.  La distribución de los residuos debe ser cercana a la normal
+>     centrada en cero.
+
+```{r}
+shapiro.test(residuals(modelo_lm))
+
+ggqqplot(residuals(modelo_lm), 
+               ylab = "Residuos", 
+               xlab = "Cuantiles teóricos", 
+               title = "Gráfico Q-Q de los residuos del modelo")
+```
+
+La prueba de Shapiro-Wilk para normalidad de los residuos resulta tener
+un valor p de 0.4957, un valor mayor a un nivel de significancia del
+0.05, por ende, hay evidencia suficiente para no rechazar la hipótesis
+nula de normalidad.
+
+Por ende, se cumple con esta condición.
+
+> 6.  La variabilidad de los residuos debe ser aproximadamente constante
+>     (homocedasticidad).
+
+```{r}
+ncvTest(modelo_lm)
+```
+
+Para este caso, la prueba de homocedasticidad resulta tener un valor p
+de 0.89612, un valor mayor a un nivel de significancia del 0.05, por
+ende, hay evidencia suficiente para no rechazar la hipótesis nula de
+homocedasticidad.
+
+Por ende, se cumple con esta condición.
+
+> 7.  Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_lm)
+```
+
+Como el valor p de la prueba de Durbin Watson resulta ser de 0.292,
+siendo también este mayor a un nivel de significancia de 0.05, esto
+significa que no hay evidencia para rechazar la hipótesis nula de
+independencia de los residuos, lo que sugiere que los residuos son
+independientes.
+
+De igual forma el intervalo de Durbin Watson es mayor a 2, siendo este
+2.202942, por ende no es necesario realizar correcciones.
+
+Por ende, se cumple con esta condición.
+
+> 8.  No debe existir multicolinealidad. Esto significa que no deben
+>     darse relaciones lineales fuertes (co- eficientes de correlación
+>     altos) entre dos o más predictores.
+
+```{r}
+# INFLACIÓN DE VARIANZA:
+print(vif(modelo_lm)%>% 
+  sort(decreasing = TRUE))
+```
+
+Como el predictor con mayor VIF es "Chest.Girth" presentando un valor de
+6.330928, encontrándose en el umbral de ser mayor a 5 y menor a 10, es
+posible concluir que existe una multicolinealidad preocupante, la cual
+podría afectar significativamente los resultados del modelo.
+
+Por ende, no se cumple con esta condición.
+
+> 9.  Las estimaciones de los coeficientes del modelo no debe estar
+>     alterados por unos pocas observaciones influyentes.
+
+```{r}
+influencePlot(modelo_lm, id.method = "identify", main = "Influencia de las observaciones", sub = "Círculos grandes indican observaciones influyentes")
+```
+
+Es posible observar que si bien los puntos 18, 20, 29, 41, 78 y 86
+destacan por sobre el resto, donde las observaciones 18 y 86 presenta
+residuos(StudRes) mayor a 2, la observación 78 presenta
+residuos(StudRes) menor a 2, pero ninguna de las seis observaciones
+supera el umbral crítico en la distancia de Cook, siendo todos estos
+menores a 1, por ende no se consideran altamente influyentes ni
+comprometen significativamente la validez del modelo.
+
+### Conclusión del modelo de regresión lineal múltiple:
+
+El modelo de regresión lineal múltiple construido no es confiable por
+completo, debido a que no cumple con las condiciones de:
+
+-   Relación lineral: No todos los predictores están relacionados
+    linealmente con la respuesta. Justificado por el valor p de Tukey
+    test global, el cual resultó se menor al nivel de significancia, lo
+    que indica que al menos uno de los predictores no es linealmente
+    relacionado con la variable "Weight". Específicamente los
+    predictores "Elbows.diameter", "Chest.Girth" y "Waist.Girth".
+
+-   Multicolinealidad: Hay presencia de multicolinealidad, lo que puede
+    afectar la interpretación de los coeficientes y la estabilidad del
+    modelo. Precisamente el predictor "Chest.Girth" que posee un VIF
+    mayor a 5.
+
+### Pregunta 4
+
+> Haciendo un poco de investigación sobre el paquete caret, en
+> particular cómo hacer Recursive Feature Elimination (RFE), construir
+> un modelo de regresión lineal múltiple para predecir la variable IMC
+> que incluya entre 10 y 20 predictores, seleccionando el conjunto de
+> variables que maximice \> R2 y que use cinco repeticiones de
+> validación cruzada de cinco pliegues para evitar el sobreajuste
+> (obviamente no se debe considerar las variables \> Peso, Estatura ni
+> estado nutricional –Weight, Height, EN respectivamente).
+
+Según la documentación de R
+(<https://www.rdocumentation.org/packages/caret/versions/6.0-92/topics/rfe>)
+RFE es una técnica de selección de predictores que consiste en eliminar
+de forma recursiva los predictores menos relevantes para el modelo.
+
+recuperar
+
+```{r}
+
+# Elimina las variables correspondientes
+datos_rfe <- grup_entrenamiento[, !(names(grup_entrenamiento) %in% c("Weight", "Height", "EN", "Gender"))]
+# Formula para modelar ICM
+formula_rfe <- ICM ~ . 
+# Repeticiones de validación cruzada con cinco pliegues
+control_rfe <- rfeControl(functions = lmFuncs, method = "repeatedcv", number = 5, repeats = 5)
+
+# Se construye el modelo RFE
+set.seed(21063)
+modelo_rfe <- rfe(formula_rfe, data = datos_rfe, sizes = 10:20, metric = "Rsquared", rfeControl = control_rfe)
+
+print(modelo_rfe)
+summary(modelo_rfe$fit)
+
+modelo_final2 <- modelo_rfe$fit
+predictors(modelo_rfe)
+trellis.par.set(caretTheme())
+plot(modelo_rfe, type = c("g", "o"))
+```
+
+Encontramos los mejores 10 predictores
+
+```{r}
+predictores <- predictors(modelo_rfe)[1:10]
+print(predictores)
+```
+
+Se hace el modelo nuevamente
+
+```{r}
+modelo_rfe_final <- train(
+  formula(paste("ICM ~", paste(predictores, collapse = " + "))),
+  data = datos_rfe,
+  method = "lm",
+  trControl = trainControl(
+    method = "repeatedcv",
+    number = 5,
+    repeats = 5
+  )
+)
+```
+
+```{r}
+summary(modelo_rfe_final)
+```
+
+Multicolinealidad entre los predictores
+
+```{r}
+print(vif(modelo_rfe_final$finalModel))
+cat("\n")
+#tolerancia
+print(1 / vif(modelo_rfe_final$finalModel))
+```
+
+Se puede apreciar que existen 3 variables con problemas de
+multicolinealidad, el VIF de Wrist.Minimum.Girth es de 8.3 lo cual
+implica problemas.
+
+Resumen del modelo
+
+```{r}
+print(summary(modelo_rfe_final$finalModel), digits = 3)
+```
+
+Se puede apreciar que únicamente 3 de los 10 predictores son
+estadisticamente significativos, el modelo explica un 83% de la varianza
+en el ICM Prueba de curvatura.
+
+```{r}
+formula_final <- as.formula(paste("ICM ~", paste(predictores, collapse = " + ")))
+modelo_rfe_equiv <- lm(formula_final, data = datos_rfe)
+residualPlots(modelo_rfe_equiv, terms = ~ 1,
+              col = "steelblue", pch = 20, col.quad = "red",
+              id = list(cex = 0.9, location = "lr"))
+```
+
+Dado el valor p \> 0.05, no se rechaza la hipótesis nula de linealidad.
+No hay evidencia estadística de curvatura en los datos.
+
+Prueba de varianza de error no constante
+
+```{r}
+ncvTest(modelo_rfe_equiv)
+```
+
+Dado el valor p, no se rechaza la hipótesis nula de homocedasticidad, la
+varianza de los residuos es constante Plot de influencia.
+
+```{r}
+modelo_inf_estad <- influencePlot(modelo_rfe_equiv, fill.col = "steelblue",
+                                  scale = 5, id = list(n = 3),
+                                  main = "Influencia de casos\n")
+```
+
+Gráfico marginal
+
+```{r}
+mmps(modelo_rfe_equiv, terms = ~ 1, 
+     col = "steelblue", pch = 20, col.line = c("steelblue", "red"),
+     smooth = list(smoother = loessLine, span = 1),
+     id = list(n = 6, cex = 0.7, location = "lr"),
+     main = "relacion marginal con predicciones RFE", sub = " ")
+```
+
+Se nota una relacion lineal fuerte.
+
+Independencia de los residuos.
+
+```{r}
+print(durbinWatsonTest(modelo_rfe_equiv))
+```
+
+Dado el valor p, no se rechaza la hipótesis nula de independencia. No
+hay evidencia estadistica de autocorrelación en los residuos normalidad
+residuos.
+
+```{r}
+shapiro.test(resid(modelo_rfe_equiv))
+```
+
+Dado el valor p, no se rechaza la hipótesis nula de normalidad. No hay
+evidencia estadística contra la normalidad de los residuos.
+
+### Conclusión del modelo de regresión lineal múltiple:
+
+Existen problemas con la multicolinealidad del modelo, los resultados no
+son confiables, dado el valor VIF moderado severo, se sugiere que
+algunas variables miden aspectos similares del cuerpo.
+
+### Pregunta 5
+
+> Usando RFE, construir un modelo de regresión logística múltiple para
+> la variable EN que incluya el conjunto de predictores, entre dos y
+> seis, que entregue la mejor curva ROC y que utilice validación cruzada
+> dejando uno fuera para evitar el sobreajuste (obviamente no se debe
+> considerar las variables Peso, Estatura –Weight y Height
+> respectivamente– ni IMC).
+
+```{r}
+
+datos_log = grup_entrenamiento[, !(names(grup_entrenamiento) %in% c("Weight", "Height", "ICM", "Gender"))]
+formula_log <- EN ~ .
+ctrl_log <- rfeControl(functions = lrFuncs, method = "LOOCV", verbose = FALSE)
+
+train_log <- trainControl(method = "none", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+set.seed(21063)
+rfe_log <- suppressWarnings(rfe(
+  formula_log,
+  data = datos_log,
+  sizes = 2:6,
+  rfeControl = ctrl_log,
+  trControl = train_log,
+  metric = "ROC",
+))
+
+modelo_final3 <- rfe_log$fit
+print(summary(modelo_final3))
+
+# ROC y AUC
+pred_probs <- predict(rfe_log, datos_log, type = "prob")
+roc_curve <- roc(response = datos_log$EN, 
+                 predictor = pred_probs[,"sobrepeso"],
+                 levels = c("no sobrepeso", "sobrepeso"))
+plot(roc_curve, 
+     main = "Curva ROC del Modelo de Predicción",
+     col = "blue",
+     lwd = 2,
+     legacy.axes = TRUE)
+grid()
+abline(a = 0, b = 1, lty = 2, col = "gray")
+auc_value <- auc(roc_curve)
+legend("bottomright", 
+       legend = sprintf("AUC = %.3f", auc_value),
+       col = "blue",
+       lwd = 2)
+
+# Se extraen los predictores seleccionados, y se filtran los datos
+predictores_aux <- predictors(rfe_log)
+data_aux <- datos_log[, c(predictores_aux, "EN")]
+
+# Se calculan las probabilidades de pertenencia a la clase "sobrepeso"
+probabilidades <- predict(modelo_final3, newdata = data_aux, type = "response")
+prediccion_clases <- factor(ifelse(probabilidades > 0.5, "sobrepeso", "no sobrepeso"),
+                           levels = c("no sobrepeso", "sobrepeso"))
+
+# Se construye matriz de confusión
+conf_matrix <- confusionMatrix(prediccion_clases, data_aux$EN)
+cat("\nMatriz de Confusión:\n")
+print(conf_matrix)
+
+```
+
+Con una exactitud de 0.91, el modelo clasifica correctamente
+aproximadamente el 91% de las observaciones, lo cual indica un alto
+nivel de precisión. La Especificidad, con un valor de 0.92, muestra una
+buena capacidad para identificar a los individuos sin sobrepeso.
+
+Para evaluar la confiabilidad de los modelos de regresión logística,
+debemos considerar varios supuestos y condiciones:
+
+> 1.  Debe existir una relación lineal entre los predictores y la
+>     respuesta transformada.
+
+```{r}
+### ResidualPlots
+# Para poder realizar residualPlots, se debe ajustar el modelo a un glm (o lm)
+predictores_finales <- predictors(rfe_log)
+formula_glm <- as.formula(paste("EN ~", paste(predictores_finales, collapse = " + ")))
+modelo_glm <- glm(formula_glm, data = datos_log, family = binomial())
+
+residualPlots(modelo_glm, terms = ~ ., 
+              col = "steelblue", 
+              pch = 20, 
+              col.quad = "red",
+              id = list(cex = 0.9, location = "lr"), fitted = FALSE)
+
+```
+
+Dado los resultados de los residualPlots, se puede confirmar que se
+cumple el supuesto de linealidad entre los predictores y la respuesta
+obtenida. Pues todo valor p obtenido es mayor a 0.05, lo que indica que
+no hay evidencia suficiente para rechazar la hipótesis nula de
+linealidad. Además que los gráficos no presentan curvatura.
+
+Lo que indica que este supuesto se cumple.
+
+> 2.  Los residuos deben ser independientes entre sí.
+
+```{r}
+
+durbinWatsonTest(modelo_final3)
+
+```
+
+Dado que el valor p es de 0.816, no hay evidencia para sospechar que no
+se esté cumpliendo la condición de independencia de los residuos.
+
+> 3.  Multicolinealidad entre los predictores
+
+```{r}
+
+print(vif(modelo_final3))
+cat("\n")
+#tolerancia
+print(1 / vif(modelo_final3))
+
+```
+
+Todas las variables muestran valor de inflación de la varianza por
+debajo de 5, lo que indica que no hay problemas de multicolinealidad
+severos en el modelo.
+
+> 4.  Información incompleta, que se produce cuando no contamos con
+>     observaciones suficientes para todas las posibles combinaciones de
+>     predictores, en especial para algún nivel de una variable
+>     categórica.
+
+```{r}
+
+n_obs <- nrow(datos_log)
+cat("Cantidad de observaciones en el modelo:", n_obs, "\n")
+cat("Cantidad de valores NA en el conjunto de datos:", sum(is.na(datos_log)), "\n")
+
+predictores_log <- predictors(rfe_log)
+print(predictores_log)
+
+# 4. Verificar cantidad de valores únicos por predictor seleccionado, según grupo EN
+datos_log %>%
+  select(all_of(c("EN", predictores_log))) %>%
+  group_by(EN) %>%
+  summarise(across(all_of(predictores_log), n_distinct), .groups = "drop")
+
+```
+
+Como es posible observar, cada combinación de predictores presenta al
+menos 30 observaciones, lo que indica que no hay problemas de
+información incompleta en el modelo.
+
+> 5.  Separación perfecta, que ocurre cuando no hay superposición entre
+>     las clases (es decir, como vimos, cuando los predictores separan
+>     ambas clases completamente).
+
+Es posible observar que en los gráficos de residuos se puede notar que
+las rectas ajustadas no están desviadas de la curva local de ajuste de
+los datos, "lo que indica que no hay separación perfecta".
+
+> 6.  Las estimaciones de los coeficientes del modelo no están dominadas
+>     por casos influyentes.
+
+```{r}
+
+influencePlot(modelo_final3)
+
+```
+
+Es posible observar que si bien los puntos 36, 61, 70 y 74 destacan por
+sobre el resto, donde la observación 70 presenta residuos(StudRes) mayor
+a 2, la observación 36 presenta residuos(StudRes) menor a 2, pero
+ninguna de las cuatro observaciones supera el umbral crítico en la
+distancia de Cook, siendo todos estos menores a 1, por ende no se
+consideran altamente influyentes ni comprometen significativamente la
+validez del modelo.
+
+Dado todas las condiciones se cumplen, se puede concluir que, los
+predictores no perjudican al modelo para que sea completamente
+confiable.
+
+## 6) Pronunciarse sobre la confiabilidad y el poder predictivo de los modelos obtenidos.
+
+### 1. Modelo de Regresión Lineal Múltiple para Peso (Weight):
+
+-   Confiabilidad:
+    -   R² ajustado = 0.978, lo que indica que el modelo explica el
+        97.8% de la variabilidad del peso.\
+    -   Todos los coeficientes son estadísticamente significativos.\
+    -   Validación mediante bootstrapping (1000 repeticiones) muestra
+        alta estabilidad.\
+    -   Sin embargo, **no se cumple el supuesto de linealidad** para
+        todos los predictores.\
+    -   Existe **multicolinealidad moderada**, especialmente en
+        Chest.Girth (VIF \> 5).
+-   Poder Predictivo:
+    -   Excelente precisión en la predicción del peso usando variables
+        antropométricas.\
+    -   El modelo tiene buena capacidad predictiva pero debe
+        interpretarse con precaución debido a los supuestos no
+        cumplidos.
+
+------------------------------------------------------------------------
+
+### 2. Modelo de Regresión Lineal Múltiple para IMC:
+
+-   Confiabilidad:
+    -   R² = 0.83, lo que indica que el modelo explica el 83% de la
+        variabilidad del IMC.\
+    -   Validación cruzada (5x5) aplicada correctamente.\
+    -   Cumple con los supuestos de normalidad, homocedasticidad,
+        independencia y linealidad.\
+    -   Presenta **problemas de multicolinealidad**: al menos tres
+        predictores tienen VIF elevados (p.ej., Wrist.Minimum.Girth con
+        VIF \> 8).
+-   Poder Predictivo:
+    -   De los 10 predictores seleccionados, solo 3 resultaron
+        estadísticamente significativos.\
+    -   Aunque el R² es alto, la multicolinealidad limita la
+        interpretación confiable del modelo.
+
+------------------------------------------------------------------------
+
+### 3. Modelo de Regresión Logística para Estado Nutricional (EN):
+
+-   Confiabilidad:
+    -   AUC = 0.973, lo que indica excelente capacidad discriminativa.\
+    -   Exactitud del 91%, validada mediante LOOCV.\
+    -   Cumple con todos los supuestos:
+        -   Linealidad con la respuesta transformada.\
+        -   Independencia de residuos.\
+        -   Sin multicolinealidad (todos los VIF \< 5).\
+        -   Sin separación perfecta.\
+        -   Sin observaciones altamente influyentes.
+-   Poder Predictivo:
+    -   Clasifica correctamente la gran mayoría de los casos.\
+    -   Buen equilibrio entre sensibilidad y especificidad.\
+    -   Las variables seleccionadas por RFE fueron apropiadas para la
+        clasificación.
+
+------------------------------------------------------------------------
+
+### Conclusiones Generales:
+
+En resumen, nuestro análisis destaca que el modelo logístico para EN tuvo el mejor desempeño global, mientras que el modelo de peso explicó bien la variabilidad pero incumplió supuestos clave; el modelo de IMC también mostró buen rendimiento, aunque afectado por multicolinealidad. Todos los modelos presentan buena capacidad predictiva, con validaciones robustas (bootstrapping, LOOCV y validación cruzada) y selección de variables bien aplicada. Sin embargo, enfrentamos limitaciones como multicolinealidad en modelos lineales, violación de linealidad en el modelo de peso, y algunos modelos con pocos predictores significativos. Por ello, recomendamos evaluar transformaciones para mejorar la linealidad de ciertos predictores, además de aumentar la muestra o replicar el estudio para verificar la estabilidad de las variables seleccionadas.

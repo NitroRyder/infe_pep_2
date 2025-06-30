@@ -1,0 +1,438 @@
+---
+title: "EP09-respuesta-equipo-2"
+author: "EJEMPLO"
+date: "2025-06-02"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(carData)
+library(ggplot2)
+library(GGally)
+library(caret)
+library(dplyr)
+library(car)
+library(carData)
+library(ggpubr)
+library(leaps)
+```
+
+# LECTURA DE ARCHIVO
+
+```{r}
+datos <- read.csv2("EP09 Datos.csv")
+```
+
+# PREGUNTAS:
+
+## 1) Definir la semilla a utilizar, que corresponde a los últimos cuatro dígitos del RUN (sin considerar el dígito verificador) del integrante de menor edad del equipo.
+
+```{r}
+set.seed(0075)
+```
+
+## 2) Seleccionar una muestra aleatoria de 100 mujeres (si la semilla es un número par) o 100 hombres (si la semilla es impar), y separar 70 casos para trabajar en la construcción de modelos y 30 para su evaluación en datos no vistos.
+
+```{r}
+datos_Filtrados <- datos %>% filter(Gender == 1) %>% select(-Gender)  %>% sample_n(100)
+# MODELOS VISTOS: -> DATOS ESNTRENAMIENTO
+datos_primeros = datos_Filtrados %>% slice_head(n = 70)
+# MODELOS NO VISTOS: -> DATOS DE PRUEBA
+datos_ultimos = datos_Filtrados %>% slice_tail(n = 30)
+#-------------------------------------------------------------------------------
+# PASAR TITULOS A UN VECTOR -> QUITAR WEIGHT
+nombres  <- colnames(datos_Filtrados)
+```
+
+## 3) Seleccionar de forma aleatoria ocho posibles variables predictoras.
+
+```{r}
+#-------------------------------------------------------------------------------
+# OBSERVACIÓN: LOS PRIMEROS 21 DATOS SON MEDIDAS EN CM DEL CUERPO, JUNTO A LA ESTATURA, EL RESTO SON DIFERENTES (3)
+variables_aleatorias <- sample(nombres[-which(nombres == "Weight")], 8, replace = FALSE)
+variables_aleatorias
+#-------------------------------------------------------------------------------
+# SELECCIONAR VARIABLES ALEATORIAS DE: DATOS FILTRADOS O PREDICTORES
+seleccionados <- datos_Filtrados %>% select(Weight, all_of(variables_aleatorias))
+#print(seleccionados)
+```
+
+Las 8 posibles variables predictoras son:
+
+-   Ankle.Minimum.Girth
+
+-   Chest.depth
+
+-   Hip.Girth
+
+-   Chest.Girth
+
+-   Biacromial.diameter
+
+-   Calf.Maximum.Girth
+
+-   Elbows.diameter
+
+-   Knees.diameter
+
+## 4) Seleccionar, de las otras variables, una que el equipo considere que podría ser útil para predecir la variable Peso (sin considerar la estatura), justificando bien esta selección.
+
+Primero nos presentamos las variables que quedan disponibles para elección
+
+```{r}
+sobrantes = setdiff(nombres, c(variables_aleatorias, "Weight", "Height"))
+print(sobrantes)
+
+prueba <- datos_primeros %>% select(Weight, all_of(sobrantes))
+```
+
+La variable seleccionada es Wrist.Minimum.Girth, que corresponde a la circunferencia mínima de la muñeca. Esta elección se justifica en base a lo expuesto por el estudio:
+
+[https://www.jahonline.org/article/S1054-139X(18)30580-9/fulltext](https://www.jahonline.org/article/S1054-139X(18)30580-9/fulltext){.uri}
+
+El cual señala que la circunferencia de la muñeca ha sido propuesta como un estimador confiable del tamaño del marco óseo en población pediátrica y adolescente pero que no ha sido probado como estimador en personas con desordenes alimenticios , se menciona que esto se debe a que huesos más grandes requieren y soportan mayor masa muscular y esquelética, contribuyendo significativamente al peso total.
+
+```{r}
+# VALOR DE SALIDA
+variable_seleccionada = "Wrist.Minimum.Girth"
+```
+
+## 5) Usando el entorno R y paquetes estándares1, construir un modelo de regresión lineal simple con el predictor seleccionado en el paso anterior.
+
+Se filtra los datos de entrenamiento, se les quita las columnas de las variables aleatorias seleccionadas anteriormente y ademas se elimina la columna de si mismo, para evitar compararse a si mismo.
+
+```{r}
+asd = datos_primeros %>% select(!all_of(variables_aleatorias)) 
+correlacion = cor(x = select(asd , -variable_seleccionada), y = select(asd, variable_seleccionada))
+print(correlacion)
+```
+
+### Variable correlación máxima:
+
+```{r}
+mayor_cor <- which(correlacion == max(abs(correlacion)))
+predictor_nombre <- row.names(correlacion)[mayor_cor]
+predictor_valor <- correlacion[mayor_cor]
+
+cat("EL MEJOR PREDICTOR PARA EL MODELO RLS ES: ", predictor_nombre, "= ", predictor_valor, "\n")
+```
+
+### Graficación de variables:
+
+Gráfico de dispersión parece mostrar una relación lineal positiva entre las variables a comparar en el MLS.
+
+```{r}
+ggplot(datos_primeros, aes_string(x = variable_seleccionada, y = "Weight")) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = paste("Gráfico de dispersión entre", variable_seleccionada, "y", "Weight"),
+       x = variable_seleccionada,
+       y = "Weight") +
+  theme_minimal()
+```
+
+La relación entre el predictor seleccionado y la variable de salida es lineal positiva, lo que sugiere que un modelo de regresión lineal simple podría ser adecuado para predecir la variable de salida a partir del predictor seleccionado.
+
+### Modelo de regresión lineal simple usando validación cruzada tenemos lo siguiente:
+
+```{r}
+modelo_rls <- lm(Weight ~ Wrist.Minimum.Girth, data = datos_primeros)
+print(summary(modelo_rls))
+
+# CALCULAR RMSE PARA EL CONJUNTO DE ENTRENAMIENTO
+rmse_entrenamiento <- sqrt(mean(resid(modelo_rls)^2))
+cat("RMSE PARA EL CONJUNTO DE ENTRENAMIENTO:", rmse_entrenamiento, "\n")
+
+# HACER PREDICCIONES PARA EL CONJUNTO DE PRUEBA
+predicciones <- predict(modelo_rls, datos_ultimos)
+
+# CALCULAR RMSE PARA EL CONJUNTO DE PRUEBA
+error <- datos_ultimos$Weight - predicciones
+rmse_prueba <- sqrt(mean(error^2))
+cat ("RMSE PARA EL CONJUNTO DE PRUEBA:", rmse_prueba, "\n")
+```
+
+### Resultado de modelo MLS
+
+El modelo ajustado por RLS es significativo, pues el valor p obtenido asociado a la variable explicativa de las ocho variables predictoras es menor a 1.368e-08. Por ende es estadísticamente significativo.
+
+Es posible explicar con un 37% aproximadamente(R² = 0.3796) de la variabilidad del peso puede ser explicada por el grosor minimo de la muñeca, lo cual es moderado considerando que se una variable predictora.
+
+Los errores de la predicción obtenidos fueron:
+
+-   RMSE de entrenamiento = 9.479485.
+-   RMSE de prueba = 7.803279.
+
+Lo que indica que en promedio, el error en las predicciones del modelo sobre el conjunto de entrenamiento es de aproximadamente 9.47 y el de prueba es aproximadamente de 7.8.
+
+En resumen, aunque el modelo tiene una buena capacidad explicativa en entrenamiento, su bajo desempeño en prueba indica que no es confiable en su totalidad.
+
+### Estudio de confiavilidad del modelo de regresión lineal simple
+
+#### 1) Las variables presentan una distribución condicional bivariante en que para cualquier valor fijo de X, los valores de Y se distribuyen normalmente con una varianza constante.
+
+Para la verificación de esta condición se utilizará una prueba de homocedasticidad por medio de la utilización de la función ncvTest():
+
+```{r}
+ncvTest(modelo_rls)
+```
+
+Tras la aplicación de este test, se obtiene un valor p de 0.13684, un valor mayor en comparación al nivel de significancia 0.05.
+
+Lo que indica que en la relación hay homocedasticidad, por ende se cumple con este punto.
+
+#### 2) La relación entre la variable X y las medias de la variable Y es lineal.
+
+Para la verificación de esta condición se realizaran gráficos de los residuos estandarizados para cada variable:
+
+```{r}
+residualPlots(modelo_rls,
+              type = "rstandard",
+              pch = 20,
+              col = "steelblue",
+              col.quad = "red",
+              id = list(
+                method = "r",
+                n = 3,
+                cex = 0.7,
+                location = "lr"
+              )
+)
+```
+
+Tras lo realizado, es posible observar que el gráfico posee una curvatura muy poco marcada, con una distribución de puntos que rodean de forma muy dispersas cerca del centro de la curva. Lo que indica que no hay evidencia visual clara de una relación no lineal.
+
+Además que el valor p 0.8769 es mayor en comparación al nivel de significancia 0.05 y un valor de Tukey de 0.8764. Lo que indica que no hay evidencia suficiente para rechazar la hipótesis nula de linealidad, cumpliendo con este punto.
+
+Lo que indica que no hay evidencia suficiente para decir que la relación es no lineal, cumpliendo con este punto.
+
+#### 3) Las observaciones de la muestra son independientes entre sí. Esto significa que no se puede usar regresión lineal con series de tiempo.
+
+Para la verificación de esta condición se realizará la prueba de Durbin Watson:
+
+```{r}
+durbinWatsonTest(modelo_rls)
+```
+
+Tras la aplicación de este test, se obtiene: - Un valor p de 0.768, lo que indica que no se rechaza hipotesis nula de independencia de errores - El valor estadístico es cercano a 2, lo que indica que no hay autocorrelación.
+
+Lo que indica que se cumple este supuesto.
+
+#### 4) Realización de grafico de distancia de Cook:
+
+De igual forma, se realizó el gráfico de Gráfico de distancias de Cook con el objetivo de averiguar observaciones atípicas.
+
+```{r}
+influencePlot(modelo_rls)
+```
+
+Es posible observar que si bien los puntos 13, 23 y 47 destacan por sobre el resto, donde la observación 23 y 47 presenta residuos(StudRes) mayor a 2, ninguna de las cinco observaciones supera el umbral crítico en la distancia de Cook, siendo todos estos menores a 1, por ende no se consideran altamente influyentes ni comprometen significativamente la validez del modelo.
+
+Dado a que se cumplen todas las condiciones, se puede concluír que para este caso, solo utilizando el predictor Wrist.Minimum.Girth es suficiente para que el modelo sea completamente confiable.
+
+## 6) Usando herramientas estándares para la exploración de modelos del entorno R, buscar entre dos y cinco predictores de entre las variables seleccionadas al azar en el punto 3, para agregar al modelo de regresión lineal simple obtenido en el paso 5.
+
+### Genera las mejores combinaciones de predictores para la variable Weight:
+
+```{r}
+
+seleccionados2 <- datos_primeros %>% 
+  select(Weight, Wrist.Minimum.Girth, all_of(variables_aleatorias))
+
+# regsubset, incluye en los modelos a Wrist.Minimum.Girth
+subset_model <- regsubsets(Weight ~ ., data = seleccionados2, force.in='Wrist.Minimum.Girth', nvmax = 5)
+res <- summary(subset_model)
+print(res)
+
+```
+
+### Selecciona la mejor combinación de predictores en base al adjr2
+
+(esta indica el porcentaje de variabilidad explicada por los predictores):
+
+```{r}
+mejor_modelo <- which.max(res$adjr2)
+variables_seleccionadas <- names(which(res$which[mejor_modelo, ]))[-1]
+print(variables_seleccionadas)
+```
+
+### Genera las mejores combinaciones de predictores para la variable Weight:
+
+```{r}
+
+formula_final <- as.formula(paste("Weight ~", paste(variables_seleccionadas, collapse = " + ")))
+
+modelo_final <- lm(formula_final, data = datos_primeros)
+summary(modelo_final)
+```
+
+### Resultado del modelo de regresión lineal múltiple:
+
+Los predictores seleccionados son:
+
+-   Wrist.Minimum.Girth
+
+-   Hip.Girth
+
+-   Chest.Girth
+
+-   Biacromial.diameter
+
+-   Elbows.diameter
+
+## 7) Evaluar la bondad de ajuste (incluyendo el análisis de casos atípicos y casos influyentes) y la generalidad (condiciones para RLM) de los modelos y “arreglarlos” en caso de que presenten algún problema.
+
+```{r}
+set.seed(0075)
+control <- trainControl(method = "cv", number = 5)
+modelo_cv <- train(formula_final, data = datos_primeros,method = "lm", trControl = control
+)
+
+```
+
+### Estudio de confiavilidad del modelo de regresión lineal multiple:
+
+#### 1. La variable de respuesta debe ser cuantitativa y continua, sin restricciones para su variabilidad.
+
+```{r}
+str(datos_primeros$Weight)
+```
+
+Se cumple con este punto, ya que la variable de respuesta es cuantitativa y continua.
+
+Por ende, se cumple con esta condición.
+
+#### 2. Los predictores deben ser cuantitativos o dicotómicos (de ahí la necesidad de variables indicadoras para manejar más de dos niveles).
+
+```{r}
+str(datos_primeros[, c("Wrist.Minimum.Girth", "Hip.Girth", "Chest.Girth", "Biacromial.diameter", "Elbows.diameter")])
+```
+
+Se cumple este punto, ya que los predictores son cuantitativos y no hay variables dicotómicas.
+
+Por ende, se cumple con esta condición.
+
+#### 3. Los predictores deben tener algún grado de variabilidad (su varianza no debe ser igual a cero). En otras palabras, no pueden ser constantes.
+
+```{r}
+apply(datos_primeros[, c("Wrist.Minimum.Girth", "Hip.Girth", "Chest.Girth", "Biacromial.diameter", "Elbows.diameter")], 2, var)
+```
+
+Como es posible observar, la varianza de cada caso son mayores que 0.
+
+Por ende, se cumple con esta condición.
+
+#### 4. Cada predictor debe estar relacionado linealmente con la respuesta.
+
+Para la realización de los pasos 4, 5 y 6 es necesaria la siguiente linea de código:
+
+```{r}
+# Ajustar el modelo directamente con Im para diagnóstico
+modelo_lm <- lm(Weight ~ Wrist.Minimum.Girth + Hip.Girth + Chest.Girth + Biacromial.diameter +
+                  Elbows.diameter, data = datos_primeros)
+
+# Gráfico de residuos
+residualPlots (modelo_lm, terms = ~ Wrist.Minimum.Girth + Hip.Girth + Chest.Girth + Biacromial.diameter +
+                 Elbows.diameter,
+               id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+               col = "steelblue", pch = 19, col.quad = "red")
+
+# Gráficos marginales
+marginalModelPlots(modelo_lm, sd = TRUE, terms = ~ Wrist.Minimum.Girth + Hip.Girth + Chest.Girth +
+                     Biacromial.diameter + Elbows.diameter,
+                   id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+                   col = "steelblue", pch = 20, col.line = c("blue", "red") )
+```
+
+Como es posible de observar en cada uno de los gráficos marginales, existe una relación aproximadamente lineal a la respuesta.
+
+Por ende, la condición se cumple.
+
+#### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
+
+Como es posible de observar en los gráficos de residuos, existe una curvatura para cada variable seleccionada como el caso de Chest.Girth y Elbows.diameter, tanto como curvas casi planas como el caso de Wrist.Minimun.Girth, Hip.Girth y Biacromial.diameter. Además de que el resultado del test de Tukey tenga un valor p de 0.006576.
+
+Por ende, la condición no se cumple por completo.
+
+#### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
+
+```{r}
+ncvTest(modelo_cv$finalModel)
+```
+
+Para este caso, la prueba de homocedasticidad resulta tener un valor p de 0.00041765, un valor menor a un nivel de significancia del 0.05, por ende, hay evidencia suficiente para rechazar la hipótesis nula de homocedasticidad.
+
+Por ende, no se cumple con esta condición.
+
+#### 7. Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_cv$finalModel)
+```
+
+Como es posible observar, el valor p de la prueba de Durbin Watson resulta ser de 0.072, siendo también este mayor a un nivel de significancia de 0.05, por lo cual, no hay evidencia para rechazar la hipótesis nula de independencia de los residuos, lo que sugiere que los residuos son independientes.
+
+De igual forma el intervalo de Durbin Watson mayor a 2, siendo este 2.443956, por ende no es necesario realizar correcciones.
+
+Por ende, se cumple con esta condición.
+
+#### 8. No debe existir multicolinealidad. Esto significa que no deben darse relaciones lineales fuertes (coeficientes de correlación altos) entre dos o más predictores.
+
+```{r}
+vif(modelo_cv$finalModel)
+```
+
+Como es posible observar, los valores VIF son menores a 5 y mayores a 1, lo que indica que no hay evidencia de multicolinealidad preocupante entre las variables independientes.
+
+Por ende, se cumple con esta condición.
+
+#### 9. Las estimaciones de los coeficientes del modelo no debe estar alterados por unos pocas observaciones influyentes.
+
+```{r}
+influencePlot(modelo_cv$finalModel)
+```
+
+Es posible observar que si bien los puntos X30, X43, X47 y X55 destacan por sobre el resto, donde la observación X55 presenta residuos(StudRes) mayor a 2, las observaciones X30 y X47 presenta residuos(StudRes) menor a 2, pero ninguna de las cinco observaciones supera el umbral crítico en la distancia de Cook, siendo todos estos menores a 1, por ende no se consideran altamente influyentes ni comprometen significativamente la validez del modelo.
+
+Dado a que hay condiciones que no se cumplen, se puede concluír que para este caso, los predictores predictor Wrist.Minimum.Girth, Hip.Girth, Chest.Girth, Biacromial.diameter y Elbows.diameter, especialmente los ultimos cuatro perjudican al modelo para que sea completamente confiable.
+
+## 8) Evaluar el poder predictivo del modelo con los datos no utilizados para construirlo.
+
+```{r}
+set.seed(0075)
+formula_final <- as.formula(paste("Weight ~", paste(variables_seleccionadas, collapse = " + ")))
+
+entrenamiento <- train(formula_final, data = datos_primeros, method = "lm", trControl = trainControl(method = "cv", number = 5))
+cat("\n---------------------------------------------\n")
+cat("RESULTADOS DE VALIDACIÓN CRUZADA:\n")
+print(entrenamiento$results)
+
+#datos de prueba
+predicciones_prueba <- predict(entrenamiento, newdata = datos_ultimos)
+#metricas a comparar efectividad
+rmse_prueba <- sqrt(mean((datos_ultimos$Weight - predicciones_prueba)^2))
+mae_prueba <- mean(abs(datos_ultimos$Weight - predicciones_prueba))
+r2_prueba <- cor(datos_ultimos$Weight, predicciones_prueba)^2
+
+cat("RMSE con datos de prueba:", rmse_prueba, "\n")
+cat("MAE con datos de prueba:", mae_prueba, "\n")
+cat("R^2 con datos de prueba:", r2_prueba, "\n")
+
+cat("\n---------------------------------------------\n")
+cat("COMPARACION DE RENDIMIENTO:\n")
+cat("RMSE - CV entrenamiento:", entrenamiento$results$RMSE, "\n")
+cat("RMSE - Prueba:", rmse_prueba, "\n")
+cat("diff:", abs(entrenamiento$results$RMSE - rmse_prueba), "\n")
+
+residuos_prueba <- datos_ultimos$Weight - predicciones_prueba
+cat("\n---------------------------------------------\n")
+cat("RESIDUOS EN PRUEBA:\n")
+cat("Media de residuos:", mean(residuos_prueba), "\n")
+cat("SD de residuos:", sd(residuos_prueba), "\n")
+```
+
+Comparando los resultados entregados por el modelo RLM anteriormente hecho, se aprecia una mejora en el R^2 de 0.38 a 0.85, también se obtiene un RMSE mejor, de 3,63, sobre los 7.80 que presentaba el otro grupo, también el modelo explica un 85,4% de la variabilidad encontrada sobre el peso, esto implica que el modelo es de alta confianza y robusto solamente usando 5 medidas corporales, debido a que un gran porcentaje de la variacion se puede explicar mediante el modelo, el porcentaje restante es atribuido a factores externos, los cuales tienen poca influencia en las predicciones hechas. Ademas de tener un MAE muy bajo, el error se reduce aproximadamente en un 54%, las predicciones difieren del valor real en 2.89 kilos.
+
+Se puede apreciar que la diferencia esta dentro del 3r punto decimal, una diferencia no mas del 2%, lo que implica que el rendimiento es prácticamente idéntico, esto implica que no existe overfitting en el modelo y que el modelo RLM es significativamente superior al modelo RLS.

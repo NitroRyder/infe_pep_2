@@ -1,0 +1,433 @@
+---
+title: "EP10-respuesta-equipo-2"
+author: "EJEMPLO"
+date: "2025-06-09"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(carData)
+library(ggplot2)
+library(GGally)
+library(caret)
+library(dplyr)
+library(car)
+library(carData)
+library(ggpubr)
+library(leaps)
+library(pROC)
+```
+
+### LECTURA DE ARCHIVO
+
+```{r}
+datos <- read.csv2("EP09 Datos.csv")
+```
+
+# PREGUNTAS:
+
+### Pregunta 1:
+
+> Asegurando reproducibilidad, seleccionar una muestra de 150 mujeres
+> (si su n° de equipo es un número par) o 150 hombres (si su n° de
+> equipo es impar), asegurando que la mitad tenga estado nutricional
+> “sobrepeso” y la otra mitad “no sobrepeso” en cada caso. Dividir esta
+> muestra en dos conjuntos: los datos de 100 personas (50 con EN
+> “sobrepeso”) para utilizar en la construcción de los modelos y 50
+> personas (25 con EN “sobrepeso”) para poder evaluarlos.
+
+```{r}
+set.seed(0075)
+
+ICM <- datos$Weight / ((datos$Height * 0.01)^2)
+datos_con_ICM <- cbind(datos, ICM)
+
+datos_con_ICM <- datos_con_ICM %>% 
+  mutate(EN = factor(ifelse(ICM >= 23.2, "sobrepeso", "no sobrepeso"), 
+                     levels = c("no sobrepeso", "sobrepeso")))
+
+mitad_sobrepeso <- datos_con_ICM %>% 
+  filter(Gender == 1 & ICM >= 23.2) %>% 
+  sample_n(75, replace = FALSE)
+
+mitad_no_sobrep <- datos_con_ICM %>% 
+  filter(Gender == 1 & ICM < 23.2) %>% 
+  sample_n(75, replace = FALSE)
+
+sobrepeso_entrenamiento <- mitad_sobrepeso %>% slice_head(n = 50)
+no_sobrepeso_entrenamiento <- mitad_no_sobrep %>% slice_head(n = 50)
+
+sobrepeso_prueba <- mitad_sobrepeso %>% slice_tail(n = 25)
+no_sobrepeso_prueba <- mitad_no_sobrep %>% slice_tail(n = 25)
+
+grup_entrenamiento <- rbind(sobrepeso_entrenamiento, no_sobrepeso_entrenamiento) %>% 
+  select(-Gender) %>%
+  sample_frac(1L)
+
+grup_prueba <- rbind(sobrepeso_prueba, no_sobrepeso_prueba) %>% 
+  select(-Gender) %>%
+  sample_frac(1L)  
+```
+
+### Pregunta 2:
+
+> Recordar las ocho posibles variables predictoras seleccionadas de
+> forma aleatoria en el ejercicio anterior.
+
+La 8 variables predictoras seleccionadas de forma aleatoria eran:
+
+-   Ankle.Minimum.Girth
+-   Chest.depth
+-   Hip.Girth
+-   Chest.Girth
+-   Biacromial.diameter
+-   Calf.Maximum.Girth
+-   Elbows.diameter
+-   Knees.diameter
+
+------------------------------------------------------------------------
+
+### Pregunta 3:
+
+> Seleccionar, de las otras variables, una que el equipo considere que
+> podría ser útil para predecir la clase EN, justificando bien esta
+> selección (idealmente con literatura).
+
+```{r}
+nombres_variables = c("Ankle.Minimum.Girth", "Hip.Girth", "Chest.depth", "Chest.Girth", "Biacromial.diameter", "Calf.Maximum.Girth", "Elbows.diameter", "Knees.diameter")
+
+
+restantes = setdiff(colnames(datos_con_ICM), c(nombres_variables, "EN" ,"ICM"))
+print(restantes)
+```
+
+Se decide usar "Waist.Girth", gracias a la información presente en el
+siguiente documento:
+
+<https://portal.amelica.org/ameli/journal/101/1014218004/html/>
+
+Donde se menciona que la circunferencia de la cintura (Waist.Girth) es
+un indicador importante para el sobrepeso, ya que esta es la mejor
+variable con la cual se pueda estimar la el valor de grasa visceral,
+factor que es un predictor importante de riesgo metabólico y
+cardiovascular en pacientes con sobrepeso.
+
+Es por lo anteriormente mencionado, que Waist.Girth es una variable
+predictora relevante para el estado nutricional (EN).
+
+### Pregunta 4:
+
+> Usando el entorno R, construir un modelo de regresión logística con el
+> predictor seleccionado en el paso anterior y utilizando de la muestra
+> obtenida.
+
+```{r}
+set.seed(0075)
+
+
+modelo <- glm(EN ~ Waist.Girth, family = binomial(link = "logit"), data = grup_entrenamiento)
+print(summary(modelo))
+
+ROC_ent <- roc(grup_entrenamiento$EN, fitted(modelo), 
+               levels = c("no sobrepeso", "sobrepeso"), 
+               direction = "<")
+
+g_ROC_ent <- ggroc(ROC_ent, aes = "steelblue")
+g_ROC_ent <- g_ROC_ent + geom_abline(slope = 1, intercept = 1,
+                                     linetype = "dashed", color = "steelblue1")
+g_ROC_ent <- g_ROC_ent + xlab("Tasa de Falsos Positivos (1 - Especificidad)") + ylab("Tasa de Verdaderos Positivos (Sensibilidad)")
+texto_ent <- paste("AUC =", round(auc(ROC_ent), 3), "\n", "AIC =", round(AIC(modelo), 2))
+g_ROC_ent <- g_ROC_ent + annotate("text", x = 0.3, y = 0.3, label = texto_ent)
+g_ROC_ent <- g_ROC_ent + theme_pubr()
+print(g_ROC_ent)
+```
+
+Del modelo obtenido es posible observar que:
+
+La variable predictora "Waist.Girth" es significativa para el modelo, ya
+que su valor p es mucho menor a 0.05, siendo este 3.51e-07. Teniendo una
+alta capacidad predictiva, siendo esta 0.887, presente en el gráfico de
+curva ROC, teniendo una curva que se aleja mucho de la diagonal. Lo que
+nos permite concluir que "Waist.Girth" es un bien predictor para este
+modelo.
+
+### Pregunta 5:
+
+> Usando estas herramientas para la exploración de modelos del entorno
+> R, buscar entre dos y cinco predictores de entre las variables
+> seleccionadas al azar, recordadas en el punto 2, para agregar al
+> modelo obtenido en el paso 4. Para esto, si - si su n° de equipo es 1
+> o 2: utilice selección hacia adelante, sin usar la función step().
+
+Se decide para ir probando variables, en vez de utilizar update, ir
+manualmente probando y agregando variables que reduzcan la mayor
+cantidad posible el AIC y asi en la siguiente iteracion, removiendo la
+variable seleccionada del pool de variables, el criterio es el
+siguiente:
+
+Si Delta \< 0, la variable mejora el modelo Si Delta \> 0, la variable
+empeora el modelo
+
+En el caso que exista mas de una variable con Delta negativo, se tomara
+la que tenga mayor magnitud.
+
+------------------------------------------------------------------------
+
+### Primera iteracion
+
+```{r}
+nombres_variables = c("Ankle.Minimum.Girth", "Hip.Girth", "Chest.depth", "Chest.Girth", "Biacromial.diameter", "Calf.Maximum.Girth", "Elbows.diameter", "Knees.diameter")
+modelo_base <- modelo
+
+for(var in nombres_variables) {
+  formula_temp <- paste("EN ~ Waist.Girth +", var)
+  modelo_temp <- glm(formula_temp, family = binomial(link = "logit"), 
+                    data = grup_entrenamiento)
+  
+  print(paste(var, "AIC =", round(AIC(modelo_temp), 2), "Delta =", round(AIC(modelo_temp) - AIC(modelo_base), 2)))
+}
+
+```
+
+Se repite el proceso, eliminando la variable que tenga su Delta mas
+negativo, en este caso es Calf.Maximum.Girth
+
+### Segunda Iteracion
+
+```{r}
+modelo_2pred <- glm(EN ~ Waist.Girth + Calf.Maximum.Girth, 
+                   family = binomial(link = "logit"), data = grup_entrenamiento)
+
+restantes = setdiff(nombres_variables, "Calf.Maximum.Girth")
+for(var in restantes) {
+  formula_temp <- paste("EN ~ Waist.Girth + Calf.Maximum.Girth +", var)
+  modelo_temp <- glm(formula_temp, family = binomial(link = "logit"), 
+                    data = grup_entrenamiento)
+  
+  delta <- AIC(modelo_temp) - AIC(modelo_2pred)
+  print(paste(var, "AIC =", round(AIC(modelo_temp), 2), "Delta =", round(AIC(modelo_temp) - AIC(modelo_base), 2)))
+}
+```
+
+Se repite el proceso, en este caso es Chest.Girth
+
+### Tercera Iteracion
+
+```{r}
+modelo_3pred = glm(EN ~ Waist.Girth + Calf.Maximum.Girth + Chest.Girth, 
+                   family = binomial(link = "logit"), data = grup_entrenamiento)
+
+restantes = setdiff(restantes, "Chest.Girth")
+for(var in restantes) {
+  formula_temp <- paste("EN ~ Waist.Girth + Calf.Maximum.Girth + Chest.Girth +", var)
+  modelo_temp <- glm(formula_temp, family = binomial(link = "logit"), 
+                    data = grup_entrenamiento)
+  
+  delta <- AIC(modelo_temp) - AIC(modelo_3pred)
+  print(paste(var, "AIC =", round(AIC(modelo_temp), 2), "Delta =", round(delta, 2)))
+}
+```
+
+Se puede apreciar que ahora la disminución del AIC es leve, se prefiere
+no agregar variables por el principio de parsimonia, por lo tanto las
+variables del modelo quedan:
+
+-   Calf.Maximum.Girth
+
+-   Biacromial.diameter
+
+-   Chest.Girth
+
+------------------------------------------------------------------------
+
+Resumiendo los resultados del modelo:
+
+```{r}
+modelo_4_final <- glm(EN ~ Waist.Girth + Calf.Maximum.Girth + Biacromial.diameter + Chest.Girth, 
+                   family = binomial(link = "logit"), data = grup_entrenamiento)
+
+print(summary(modelo_4_final))
+```
+
+Tras la realización de este modelo es posible observar que:
+
+Todos los predictores son significativos, ya que sus valores p son
+menores a 0.05, lo que indica que tienen un impacto significativo en la
+predicción del estado nutricional (EN). Además, el modelo entrega un AIC
+de 66.163, lo que indica que el modelo es relativamente bueno en
+términos de ajuste.
+
+### Pregunta 6
+
+> Evaluar la confiabilidad de los modelos (i.e. que tengan un buen nivel
+> de ajuste y son generalizables) y “arreglarlos” en caso de que tengan
+> algún problema.
+
+Para evaluar la confiabilidad de los modelos de regresión logística,
+debemos considerar varios supuestos y condiciones:
+
+> 1.  Debe existir una relación lineal entre los predictores y la
+>     respuesta transformada.
+
+```{r}
+# GRAFICO DE RESIDUOS
+residualPlots(modelo_4_final, terms = ~ Waist.Girth + Calf.Maximum.Girth + Biacromial.diameter + Chest.Girth,
+              id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
+               col = "steelblue", pch = 19, col.quad = "red", fitted = FALSE)
+```
+
+Dado los resultados de los residualPlots, se puede confirmar que se
+cumple el supuesto de linealidad entre los predictores y la respuesta
+obtenida. Pues todo valor p obtenido es mayor a 0.05, lo que indica que
+no hay evidencia suficiente para rechazar la hipótesis nula de
+linealidad. Además que los gráficos no presentan curvatura.
+
+Lo que indica que este supuesto se cumple.
+
+> 2.  Los residuos deben ser independientes entre sí.
+
+```{r}
+durbinWatsonTest(modelo_4_final)
+```
+
+Dado que el valor p es de 0.898, no hay evidencia para sospechar que no
+se esté cumpliendo la condición de independencia de los residuos
+
+> 3.  Multicolinealidad entre los predictores, que en este caso se
+>     evalúa y aborda del mismo modo que para RLM (por ejemplo, mediante
+>     el factor de inflación de la varianza o la tolerancia).
+
+```{r}
+vif(modelo_4_final)
+```
+
+Dado que los valores VIF son menores a 5 y mayores a 1, no hay evidencia de multicolinealidad preocupante entre entre los predictores del modelo.
+
+Lo que indica que este supuesto se cumple.
+
+> 4.  Información incompleta, que se produce cuando no contamos con
+>     observaciones suficientes para todas las posibles combinaciones de
+>     predictores, en especial para algún nivel de una variable
+>     categórica.
+
+```{r}
+# CANTIDAD DE OBSERVACIONES EN EL MODELO
+n_obs <- nrow(grup_entrenamiento)
+cat("Cantidad de observaciones en el modelo:", n_obs, "\n")
+
+# VERICAR QUE TODO VALOR NO SEA N/A
+cat("Cantidad de valores NA en el modelo:", sum(is.na(grup_entrenamiento)), "\n")
+
+# Verificar la cantidad de valores únicos por cada predictor numérico
+
+grup_entrenamiento %>%
+  group_by(EN) %>%
+  summarise(
+    biacromial_unique = n_distinct(Biacromial.diameter),
+    calf_unique = n_distinct(Calf.Maximum.Girth),
+    chest_unique = n_distinct(Chest.Girth),
+    waist_unique = n_distinct(Waist.Girth)
+  )
+```
+
+Como es posible observar, cada combinación de predictores presenta al
+menos 29 observaciones, lo que indica que no hay problemas de
+información incompleta en el modelo.
+
+> 5.  Separación perfecta, que ocurre cuando no hay superposición entre
+>     las clases (es decir, como vimos, cuando los predictores separan
+>     ambas clases completamente).
+
+Es posible observar que en los graficos de residuos se puede notar que
+las rectas ajustadas no están desviadas de la curva local de ajuste de
+los datos, "lo que indica que no hay separación perfecta".
+
+> 6.  Las estimaciones de los coeficientes del modelo no estan dominadas
+>     por casos influyentes.
+
+```{r}
+influencePlot(modelo_4_final)
+```
+
+Es posible observar que si bien los puntos 41, 58, 71, 76 y 95 destacan por sobre el resto, donde la observación 76 presenta residuos(StudRes) mayor a 2, la observación 95 presenta residuos(StudRes) menor a 2, pero ninguna de las cinco observaciones supera el umbral crítico en la distancia de Cook, siendo todos estos menores a 1, por ende no se consideran altamente influyentes ni comprometen significativamente la validez del modelo.
+
+Dado todas las condiciones se cumplen, se puede concluir que, los predictores no perjudican al modelo para que sea completamente confiable.
+
+> 7.  Usando código estándar, evaluar el poder predictivo de los modelos
+>     con los datos de las 50 personas que no se incluyeron en su
+>     construcción en términos de sensibilidad y especificidad.
+
+```{r}
+
+# Probabilidades predichas por el modelo
+predicciones_prob <- predict(modelo_4_final, newdata = grup_prueba, type = "response")
+
+# Clasificación de las probabilidades
+predicciones_clase <- ifelse(predicciones_prob > 0.5, "sobrepeso", "no sobrepeso")
+predicciones_clase <- factor(predicciones_clase, levels = c("no sobrepeso", "sobrepeso"))
+
+observado <- factor(grup_prueba$EN, levels = c("no sobrepeso", "sobrepeso"))
+
+matriz_conf <- table(Predicho = predicciones_clase, Observado = observado)
+
+verdaderos_positivos <- matriz_conf["sobrepeso", "sobrepeso"]
+falsos_negativos <- matriz_conf["no sobrepeso", "sobrepeso"]
+verdaderos_negativos <- matriz_conf["no sobrepeso", "no sobrepeso"]
+falsos_positivos <- matriz_conf["sobrepeso", "no sobrepeso"]
+
+sensibilidad <- verdaderos_positivos / (verdaderos_positivos + falsos_negativos)
+especificidad <- verdaderos_negativos / (verdaderos_negativos + falsos_positivos)
+exactitud <- (verdaderos_positivos + verdaderos_negativos) / sum(matriz_conf)
+
+cat("\nMatriz de Confusión:\n")
+print(matriz_conf)
+cat("\nRendimiento del modelo en datos de prueba:\n")
+cat("Sensibilidad:", round(sensibilidad, 3), "\n")
+cat("Especificidad:", round(especificidad, 3), "\n")
+cat("Exactitud:", round(exactitud, 3), "\n")
+
+
+
+
+
+# Probabilidades predichas por el modelo en datos de entrenamiento
+predicciones_prob_entrenamiento <- predict(modelo_4_final, newdata = grup_entrenamiento, type = "response")
+
+# Clasificación de las probabilidades
+predicciones_clase_entrenamiento <- ifelse(predicciones_prob_entrenamiento > 0.5, "sobrepeso", "no sobrepeso")
+predicciones_clase_entrenamiento <- factor(predicciones_clase_entrenamiento, levels = c("no sobrepeso", "sobrepeso"))
+
+# Valores observados reales
+observado_entrenamiento <- factor(grup_entrenamiento$EN, levels = c("no sobrepeso", "sobrepeso"))
+
+# Matriz de confusión
+matriz_conf_entrenamiento <- table(Predicho = predicciones_clase_entrenamiento, Observado = observado_entrenamiento)
+
+# Cálculo de métricas
+verdaderos_positivos_ent <- matriz_conf_entrenamiento["sobrepeso", "sobrepeso"]
+falsos_negativos_ent     <- matriz_conf_entrenamiento["no sobrepeso", "sobrepeso"]
+verdaderos_negativos_ent <- matriz_conf_entrenamiento["no sobrepeso", "no sobrepeso"]
+falsos_positivos_ent     <- matriz_conf_entrenamiento["sobrepeso", "no sobrepeso"]
+
+sensibilidad_ent <- verdaderos_positivos_ent / (verdaderos_positivos_ent + falsos_negativos_ent)
+especificidad_ent <- verdaderos_negativos_ent / (verdaderos_negativos_ent + falsos_positivos_ent)
+exactitud_ent <- (verdaderos_positivos_ent + verdaderos_negativos_ent) / sum(matriz_conf_entrenamiento)
+
+# Mostrar resultados
+cat("\nMatriz de Confusión (Entrenamiento):\n")
+print(matriz_conf_entrenamiento)
+cat("\nRendimiento del modelo en datos de entrenamiento:\n")
+cat("Sensibilidad:", round(sensibilidad_ent, 3), "\n")
+cat("Especificidad:", round(especificidad_ent, 3), "\n")
+cat("Exactitud:", round(exactitud_ent, 3), "\n")
+
+```
+
+Como se puede observar en los resultados, ambos modelos muestran una
+buena capacidad predictiva, esto debido a que la sensibilidad y
+especificidad son relativamente altas, sin embargo, en los datos de
+prueba ambos valores son más bajos que en los datos de entrenamiento, lo
+que indica que el modelo no generaliza tan bien a nuevos datos.

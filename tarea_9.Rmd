@@ -70,8 +70,9 @@ nombres_no_tomados
 
 
 # 5) Usando el entorno R y paquetes estándares1, construir un modelo de regresión lineal simple con el predictor seleccionado en el paso anterior.
+##-----------------------------------------------------------------------------------
+## A) RLS USANDO VALIDACIÓN CRUZADA SIMPLE:
 
-## RLS USANDO VALIDACIÓN CRUZADA SIMPLE:
 ```{r}
 # CONSIDERANDO COMO VARIABLE DEPENDIENE # "Peso" -> "Weight" USANDO "Hip.Girth" COMO PREDICTOR
 modelo_rls_1 <- lm(Weight ~ Hip.Girth, data = datos_entrenamiento)
@@ -92,8 +93,36 @@ rmse_prueba <- sqrt ( mean ( error ** 2) )
 cat ("MSE para el conjunto de prueba:       " , rmse_prueba )
 ```
 
+## a) Resultado del modelo:
+-----------------------------------------------------------------------------------
+#### AJUSTE:
+- R² (Multiple R-squared) = 0.7943: el modelo explica el 79.4% de la variabilidad del peso. 
 
-## RLS USANDO VALIDACIÓN CRUZADA DE K PLIEGUES:
+Hay un ajuste bueno para el modelo (lo que es bueno).
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p del predictor Hip.Girth es menor a 0.05, lo que indica que es un 
+  predictor significativo al presentar un valor p de < 2e-16.
+
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de < 2.2e-16
+
+-----------------------------------------------------------------------------------
+#### ERROR CUADRÁTICO MEDIO (MSE):
+- MSE para el conjunto de entrenamiento: 4.69688 
+- MSE para el conjunto de prueba:        4.259928 
+
+Como son similares, podemos concluir que el modelo no está sobreajustado.
+-----------------------------------------------------------------------------------
+## b) CONCLUCIÓN MODELO:
+
+EL MODELO TIENE ALTA CALIDAD, CUMPLE CON LOS CRITERIOS DE AJUSTE, SIGNIFICANCIA 
+DEL COEFICIENTE Y SIGNIFICANCA DEL MODELO.
+##-----------------------------------------------------------------------------------
+
+
+## B) RLS USANDO VALIDACIÓN CRUZADA DE K PLIEGUES:
 ```{r}
 # CONSIDERANDO COMO VARIABLE DEPENDIENE # "Peso" -> "Weight" USANDO "Hip.Girth" COMO PREDICTOR
 entrenamiento <- train(Weight ~ Hip.Girth, 
@@ -120,7 +149,35 @@ cat ("MSE para el conjunto de prueba:       " , rmse_prueba )
 ```
 
 
-## RLS USANDO VALIDACIÓN CRUZADA DEJANDO UNO FUERA
+## a) Resultado del modelo:
+-----------------------------------------------------------------------------------
+#### AJUSTE:
+- R² (Multiple R-squared) = 0.7943: el modelo explica el 79.4% de la variabilidad del peso. 
+
+Hay un ajuste bueno para el modelo (lo que es bueno).
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p del predictor Hip.Girth es menor a 0.05, lo que indica que es un 
+  predictor significativo al presentar un valor p de < 2e-16.
+
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de < 2.2e-16
+
+-----------------------------------------------------------------------------------
+#### ERROR CUADRÁTICO MEDIO (MSE):
+- MSE para el conjunto de entrenamiento: 4.69688 
+- MSE para el conjunto de prueba:        4.259928 
+
+Como son similares, podemos concluir que el modelo no está sobreajustado.
+-----------------------------------------------------------------------------------
+## b) CONCLUCIÓN MODELO:
+
+EL MODELO TIENE ALTA CALIDAD, CUMPLE CON LOS CRITERIOS DE AJUSTE, SIGNIFICANCIA 
+DEL COEFICIENTE Y SIGNIFICANCA DEL MODELO.
+##-----------------------------------------------------------------------------------
+
+## C) RLS USANDO VALIDACIÓN CRUZADA DEJANDO UNO FUERA
 ```{r}
 # CONSIDERANDO COMO VARIABLE DEPENDIENE # "Peso" -> "Weight" USANDO "Hip.Girth" COMO PREDICTOR
 entrenamiento2 <- train(Weight ~ Hip.Girth, 
@@ -146,15 +203,48 @@ rmse_prueba <- sqrt ( mean ( error ** 2) )
 cat ("MSE para el conjunto de prueba:       " , rmse_prueba )
 ```
 
-### ESTUDIO DE CONFIAVILIDAD DE modelo_rls_1:
+## a) Resultado del modelo:
+-----------------------------------------------------------------------------------
+#### AJUSTE:
+- R² (Multiple R-squared) = 0.7943: el modelo explica el 79.4% de la variabilidad del peso. 
+
+Hay un ajuste bueno para el modelo (lo que es bueno).
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p del predictor Hip.Girth es menor a 0.05, lo que indica que es un 
+  predictor significativo al presentar un valor p de < 2e-16.
+
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de < 2.2e-16
+
+-----------------------------------------------------------------------------------
+#### ERROR CUADRÁTICO MEDIO (MSE):
+- MSE para el conjunto de entrenamiento: 4.69688 
+- MSE para el conjunto de prueba:        4.259928 
+
+Como son similares, podemos concluir que el modelo no está sobreajustado.
+-----------------------------------------------------------------------------------
+## b) CONCLUCIÓN MODELO:
+
+EL MODELO TIENE ALTA CALIDAD, CUMPLE CON LOS CRITERIOS DE AJUSTE, SIGNIFICANCIA 
+DEL COEFICIENTE Y SIGNIFICANCA DEL MODELO.
+##-----------------------------------------------------------------------------------
+
+## D) ESTUDIO DE CONFIAVILIDAD DE modelo_rls_1:
 
 #### 1) PRUEBA DE HOMOCEDASTICIDAD:
+
+H0: la varianza de los residuos es constante (homocedasticidad).
+H1: la varianza de los residuos no es constante (heterocedasticidad).
 
 ```{r}
 # Prueba de la varianza del error no constante
 cat("\nPRUEBA DE HOMOCEDASTICIDAD:\n")
 print (ncvTest(modelo_rls_1))
 ```
+Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendio con la condición de homocedasticidad.
+
 
 #### 2) DESPLEGAR GRÁFICOS DE RESIDUOS Y PRUEBAS DE CURVATURA:
 
@@ -171,11 +261,26 @@ marginalModelPlots(modelo_rls_1 , sd = TRUE ,
                    col = "steelblue" , pch = 20 , col.line = c("steelblue" , "red") )
 ```
 
+Grafico de reciduos:
+Si bien es posible observar que presenta una curvatura, el test de curvatura de Tukey no es significativo, pues 
+presenta un valor de 0.1553, uno mayor a 0.05, lo que refuerza la conclusión de que la relación entre Hip.Girth y Weight puede ser considerada lineal para fines del modelo.
+
+Grafico marginales:
+La relación es lineal, con un ajuste preciso y sin patrones de curvatura. Por tanto, el supuesto de linealidad está bien cumplido
+
+Cumpliendio con la condición de linealidad de los residuos.
+
 #### 3) PRUEBA DE INDEPENDENCIA DE LOS RESIDUOS:
 
 ```{r}
 durbinWatsonTest(modelo_rls_1)
 ```
+H0: Los residuos son independientes.
+H1: Los residuos no son independientes.
+
+Como el valor p es mayor a 0.05, no se rechaza H0, con un valor de Durbin Watson mayor a 2, lo que sugiere que no hay autocorrelación. 
+Cumpliendio con la condición de independencia de los residuos.
+
 
 #### 4) DESPLEGAR GRÁFICOS DE INFLUENCIA:
 
@@ -186,7 +291,21 @@ casos_influyentes <- influencePlot(modelo_rls_1 , id = list(cex = 0.7))
 print ( casos_influyentes )
 ```
 
+Es posible observar que si bien los puntos 22, 41, 49, 53 y 57 destacan por
+sobre el resto, donde la observación 57 presenta residuos(StudRes) mayor
+a 2, la observación 53 presenta residuos(StudRes) menor a -2 lo cual las 
+clasifica como potencialmente atípicas, pero ninguna de las observaciones 
+supera el umbral crítico en la distancia de Cook, siendo todos estos menores 
+a 1, por ende no se consideran altamente influyentes ni comprometen 
+significativamente la validez del modelo.
 
+## E) CONCLUCIÓN DEL MODELO.
+EL MODELO HA CUMPLIDO CON TODOS LOS CRITERIOS DE CONFIABILIDAD. ADEMÁS DE TENER 
+UNA CAPACIDAD PREDICTIVA ALTA. 
+
+POR LO TANTO ES UN MODELO CONFIABLE, VALIDO Y CON UNA BUENA CAPACIDAD PREDICTIVA.
+
+##-----------------------------------------------------------------------------------
 
 # 6) Usando herramientas estándares1 para la exploración de modelos del entorno R, buscar entre dos y cinco predictores de entre las variables seleccionadas al azar en el punto 3, para agregar al modelo de regresión lineal simple obtenido en el paso 5.
 
@@ -281,6 +400,7 @@ print (modelo_seleccionado [["coefficients"]])
 
 ```
 
+##-----------------------------------------------------------------------------------
 
 # 7) Evaluar la bondad de ajuste (incluyendo el análisis de casos atípicos y casos influyentes) y la generalidad (condiciones para RLM) de los modelos y “arreglarlos” en caso de que presenten algún problema.
 
@@ -298,19 +418,51 @@ cat("\n-----------------------------------------\n")
 cat("AIC: ", AIC(modelo_seleccionado), "\n")
 cat("BIC: ", BIC(modelo_seleccionado), "\n")
 ```
-### ESTUDIO DE CONFIAVILIDAD DE modelo_seleccionado:
+
+## a) Resultado del modelo:
+-----------------------------------------------------------------------------------
+#### AJUSTE:
+- R² (Multiple R-squared) = 0.8714: el modelo explica el 87.1% de la variabilidad del peso. 
+
+Hay un ajuste bueno para el modelo (lo que es bueno).
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p de todos los predictores seleccionados son menores a 0.05, lo que indica que son 
+  predictores significativos al presentar valores p de < 2e-16.
+
+-----------------------------------------------------------------------------------
+#### SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de < 2.2e-16
+
+-----------------------------------------------------------------------------------
+#### BONDAD DE AJUSTE DEL MODELO SELECCIONADO AIC Y BIC:
+AIC:  396.3611 
+BIC:  412.1006
+
+-----------------------------------------------------------------------------------
+
+## b) ESTUDIO DE CONFIAVILIDAD DE modelo_seleccionado:
 
 #### 1. La variable de respuesta debe ser cuantitativa y continua, sin restricciones para su variabilidad.
 
 ```{r}
 str(datos$Weight)
 ```
+Se cumple con este punto, ya que la variable de respuesta es
+cuantitativa y continua.
+
+Por ende, se cumple con esta condición.
 
 #### 2. Los predictores deben ser cuantitativos o dicotómicos (de ahí la necesidad de variables indicadoras para manejar más de dos niveles).
 
 ```{r}
-str(datos_tomados)
+str(datos_tomados[, -1]) # Excluyendo la variable de respuesta
 ```
+
+Se cumple este punto, ya que los predictores son cuantitativos y no hay
+variables dicotómicas.
+
+Por ende, se cumple con esta condición.
 
 #### 3. Los predictores deben tener algún grado de variabilidad (su varianza no debe ser igual a cero). En otras palabras, no pueden ser constantes.
 
@@ -322,6 +474,10 @@ cat("--------------------------------------------------\n")
 
 apply(datos_tomados, 2, var)
 ```
+
+Como es posible observar, la varianza de cada caso son mayores que 0.
+
+Por ende, se cumple con esta condición.
 
 #### 4. Cada predictor debe estar relacionado linealmente con la respuesta.
 
@@ -339,29 +495,50 @@ marginalModelPlots(modelo_seleccionado, sd = TRUE,
                    col = "steelblue", pch = 20, col.line = c("blue", "red"))
 ```
 
-RESPUESTA DE ANALISIS DE RESIDUOS
+Grafico marginales:
+La relación es lineal, con un ajuste preciso y sin patrones de curvatura. Por tanto, el supuesto de linealidad está bien cumplido
+
+Cumpliendio con la condición de linealidad de los predictores con la variable de respuesta.
 
 #### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
 
-RESPUESTA DE ANALISIS DE RESIDUOS
+Grafico de reciduos:
+Si bien es posible observar que presenta una curvatura, el test de curvatura de Tukey no es significativo, pues 
+presenta un valor de 0.933, uno mayor a 0.05, lo que refuerza la conclusión de que la relación entre los predictores seleccionados y Weight puede ser considerada lineal para fines del modelo.
+
+Cumplienfo con la condición de normalidad de los residuos.
 
 #### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
+
+H0: La varianza de los residuos es constante (homocedasticidad).
+H1: La varianza de los residuos no es constante (heterocedasticidad).
 
 ```{r}
 ncvTest(modelo_seleccionado)
 ```
 
+Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendio con la condición de homocedasticidad.
+
 #### 7. Los residuos deben ser independientes entre sí.
+
+H0: Los residuos son independientes.
+H1: Los residuos no son independientes.
 
 ```{r}
 durbinWatsonTest(modelo_seleccionado)
 ```
+
+Como el valor p es mayor a 0.05, no se rechaza H0, con un valor de Durbin Watson mayor a 2, lo que sugiere que no hay autocorrelación.
 
 #### 8. No debe existir multicolinealidad. Esto significa que no deben darse relaciones lineales fuertes (co-eficientes de correlación altos) entre dos o más predictores.
 
 ```{r}
 vif(modelo_seleccionado)
 ```
+
+Todas las variables muestran valor de inflación de la varianza por
+debajo de 5, lo que indica que no hay problemas de multicolinealidad
+severos en el modelo.
 
 #### 9. Las estimaciones de los coeficientes del modelo no debe estar alterados por unos pocas observaciones
 influyentes.
@@ -373,6 +550,21 @@ casos_influyentes <- influencePlot(modelo_seleccionado ,id = list(cex = 0.7))
 print(casos_influyentes)
 ```
 
+
+Es posible observar que si bien los puntos 25, 27, 40, 42, 49 y 68 destacan por
+sobre el resto, donde las observaciones 40 y 68 presentan residuos(StudRes) menor a -2 lo cual las 
+clasifica como potencialmente atípicas, pero ninguna de las observaciones 
+supera el umbral crítico en la distancia de Cook, siendo todos estos menores 
+a 1, por ende no se consideran altamente influyentes ni comprometen 
+significativamente la validez del modelo.
+
+## c) CONCLUCIÓN DEL MODELO.
+EL MODELO HA CUMPLIDO CON TODOS LOS CRITERIOS DE CONFIABILIDAD. ADEMÁS DE TENER 
+UNA CAPACIDAD PREDICTIVA ALTA. 
+
+POR LO TANTO ES UN MODELO CONFIABLE, VALIDO Y CON UNA BUENA CAPACIDAD PREDICTIVA.
+
+##-----------------------------------------------------------------------------------
 
 # 8) Evaluar el poder predictivo del modelo con los datos no utilizados para construirlo.
 
@@ -402,11 +594,6 @@ cat("ERROR ABSOLUTO MEDIO (MAE): ", mae, "\n")
 cat("\n--------------------------------------------------------------\n")
 ```
 
-```{r}
+Al evaluar el poder predictivo del modelo ajustado sobre el conjunto de prueba externo, se obtiene un RMSE de 3.53 y un MAE de 2.78, valores que son similares al error estándar residual observado en el ajuste del modelo (aprox. 3.89) (Residual standard error: 3.885).
 
-```
-
-
-
-
-
+Esto indica que el modelo presenta una buena capacidad de generalización, ya que su rendimiento en datos no utilizados en el entrenamiento se mantiene comparable al rendimiento sobre los datos de entrenamiento.
