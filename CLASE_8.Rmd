@@ -72,6 +72,13 @@ print (qq_t)
 yuen(formula = Tiempo ~ Algoritmo, data = datos, tr = gamma)
 ```
 
+- Diferencia entre las medias truncadas de 0,246, con intervalo de 95 % de confianza (−0,859; 1,351) 
+- Tamaño del efecto de 0,090. 
+- La prueba no resulta significativa (Ty(29,05) = 0,455; p = 0,653) al nivel de significación α = 0,05.
+
+Por lo que concluimos con 95 % de confianza que no es posible descartar que ambos algoritmos tienen, en promedio, igual tiempo de ejecución.
+
+
 ```{r}
 
 ```
@@ -113,6 +120,7 @@ print (prueba_media)
 
 ```
 
+# ------------------------------------------------------------------------------
 # 2) Prueba de Yuen para dos muestras pareadas
 
 ## A) Datos del tiempo de ejecución registrado por los algoritmos en las mismas instancias.
@@ -153,6 +161,15 @@ qq <- qq + theme (legend.position = "none")
 print (qq)
 ```
 
+Entonces, para el ejemplo vamos a contrastar las siguientes hipótesis:
+- H0: Sin considerar casos extremos, en promedio, los algoritmos A y B tardan lo mismo en resolver las 
+  mismas instancias de prueba. Matemáticamente: si D es la distribución de las diferencias en el tiempo
+  de ejecución que tardan los algoritmos en resolver las mismas instancias, entonces la media truncada
+  de estas diferencias es nula: µtD = 0.
+  
+- HA: A pesar de no considerar los casos extremos, los algoritmos A y B, en promedio, no toman el mismo
+  tiempo de ejecución para resolver las mismas instancias de prueba. Es decir, µtD ̸= 0
+
 ## B) Prueba de Yuen para dos muestras pareadas
 
 ```{r}
@@ -165,10 +182,16 @@ print ( prueba )
 
 ```
 
+Podemos ver que la prueba resulta significativa (Ty(14) = −3,584; p = 0,003; γ = 0,2) para el nivel de
+significación establecido. Así, debemos concluir con 99 % confianza que existe una diferencia estadísticamente
+significativa en el desempeño de ambos algoritmos, siendo el algoritmo A el más eficiente (puesto que la
+diferencia estimada entre las medias tiene signo negativo).
+
 ```{r}
 
 ```
 
+# ------------------------------------------------------------------------------
 # 3) Análisis robusto de una vía para muestras independientes
 
 ```{r}
@@ -205,6 +228,16 @@ print ( qq )
 
 ```
 
+De esta forma, podemos aplicar el análisis robusto de una vía para muestras independientes, con las siguientes
+hipótesis:
+- H0 : el tiempo de ejecución promedio necesitado para resolver instancias de igual tamaño es la misma para
+  los tres algoritmos. Matemáticamente: µA = µB = µC .
+
+- HA : el tiempo de ejecución promedio necesitado para resolver instancias de igual tamaño es diferente para
+  al menos un algoritmo. Matemáticamente: ∃i, j ∈ {A, B, C}, i ̸= j | µi ̸= µj .
+
+Supondremos un nivel de significación α = 0,05 para este estudio
+
 ## A) Análisis robusto de una vía para comparar muestras independientes.
 
 
@@ -219,8 +252,8 @@ set.seed (666)
 una_via <- t1way ( Tiempo ~ Algoritmo , data = datos ,
                    tr = gamma , alpha = alfa , nboot = nboot )
 
-cat ("Análisis de una vía para muestras independientes ( asimpótico )\n")
-cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - -\n")
+cat("Análisis de una vía para muestras independientes ( asimpótico )\n")
+cat("---------------------------------------------------------------\n")
 print ( una_via )
 
 if( una_via [["p.value"]] < alfa ) {
@@ -228,11 +261,17 @@ if( una_via [["p.value"]] < alfa ) {
                          tr = gamma , alpha = alfa )
 
   cat ("Análisis post-hoc para muestras independientes ( asimpótico )\n")
-  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - -\n")
+  cat("---------------------------------------------------------------\n")
   print ( una_via_ph )
 }
 
 ```
+
+El resultado de ejecutar este trozo de código puede verse en la figura 12.8. Vemos que la prueba robusta
+ómnibus resulta significativa (F(2; 34,39) = 10,981; p < 0,001) al nivel establecido, por lo que debemos rechazar la hipótesis nula. Concluimos, entonces, con 95 % confianza, que existe una diferencia estadísticamente significativa entre los tiempos promedio de ejecución de los algoritmos cuando no se consideran casos extremos. Al efectuar el procedimiento post-hoc, podemos concluir que, sin considerar los casos extremos, el algoritmo C presenta un tiempo de ejecución promedio más alto que los algoritmos 
+A (xtA − xtC = 1,496 [ms]; 95 %CI: [0,731; 2,444] [ms]; p < 0,001) y 
+B (xtB − xtC = 1,250 [ms]; 95 %CI: [0,163; 2,342] [ms]; p = 0,008).
+
 
 ## B) Análisis robusto de una vía para muestras independientes aplicando bootstrapping.
 
@@ -243,7 +282,7 @@ una_via_bt <- t1waybt ( Tiempo ~ Algoritmo , data = datos ,
                         tr = gamma , nboot = nboot )
 
 cat ("Análisis de una vía para muestras independientes ( bootstrapped )\n")
-cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - -\n")
+cat("------------------------------------------------------------------\n")
 print ( una_via_bt )
 
 if( una_via_bt [["p.value"]] < alfa ) {
@@ -252,12 +291,14 @@ if( una_via_bt [["p.value"]] < alfa ) {
                              tr = gamma , nboot = nboot )
 
   cat ("Análisis post-hoc para muestras independientes ( bootstrapped )\n")
-  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - -\n")
+  cat("----------------------------------------------------------------\n")
   print ( una_via_bt_ph )
 }
 
 ```
 
+
+# ------------------------------------------------------------------------------
 # 4) Análisis robusto de una vía para muestras correlacionadas
 
 ## A) Diferencias en los tiempo de ejecución registrados por tres algoritmos en las mismas instancias.
@@ -303,6 +344,18 @@ print ( qq )
 
 ```
 
+Así, se cumplen las condiciones para aplicar un análisis robusto de una vía para muestras correlacionadas
+para contrastar, en el ejemplo, las siguientes hipótesis:
+
+- H0: en promedio, no hay diferencias en el tiempo de ejecución necesitado por cada algoritmo en resolver
+  las mismas instancias. Si µ(A − B), µ(A − C) y µ(B − C) denotan las medias de las diferencias en tiempos de
+  ejecución necesitado por cada par de algoritmos, entonces la hipótesis puede escribirse como: µ(A − B) =
+  µ(A − C) = µ(B − C) = 0.
+
+- HA: la media de las diferencias en el tiempo de ejecución necesitado para resolver las mismas instancias es
+  diferente para al menos un par de algoritmos. Matemáticamente: ∃Ai, Aj ∈ {A, B, C}, | µ(Ai − Aj ) ̸= 0.
+
+
 ## B) Análisis robusto de una vía para muestras correlacionadas.
 
 ```{r}
@@ -315,7 +368,7 @@ mr_rob <- rmanova ( y = datos [["Tiempo"]] , groups = datos [["Algoritmo"]] ,
                     blocks = datos [["Instancia"]] , tr = gamma )
 
 cat ("Análisis de una vía para medidas repetidas ( asimpótico )\n")
-cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- -\n")
+cat("------------------------------------------------------------------\n")
 print ( mr_rob )
 
 if( mr_rob [["p.value"]] < alfa ) {
@@ -323,10 +376,23 @@ if( mr_rob [["p.value"]] < alfa ) {
                        blocks = datos [["Instancia"]] , tr = gamma , alpha = alfa )
 
   cat ("Análisis post-hoc para medidas repetidas ( asimpótico )\n")
-  cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -\n")
+  cat("------------------------------------------------------------------\n")
   print ( mr_rob_ph )
 }
 ```
+
+La figura 12.11 contiene el resultado de ejecutar el script 12.10, que indica que la prueba robusta ómnibus es
+significativa para el ejemplo (F(1,50; 20,96) = 24,171; p < 0,001) al nivel establecido, por lo que debemos
+rechazar la hipótesis nula. Concluimos, entonces, con 95 % confianza, que existe una diferencia estadísticamente significativa entre los tiempos promedio de ejecución de los algoritmos cuando no se consideran casos extremos.
+
+Al efectuar el procedimiento post-hoc recortando los casos extremos podemos concluir que el algoritmo A es
+significativamente más eficiente que los algoritmos 
+B (xtA − xtB = −0,853 [ms]; 95 %CI: [−1,168; −0,538] [ms];p < 0,001) y 
+C (xtA − xtC = −0,687 [ms]; 95 %CI: [−0,982; −0,391] [ms]; p < 0,001). 
+
+Sin embargo, debemos notar que la media recortada de las diferencia en los tiempos de ejecución requeridos por los algoritmos 
+B y C (xtB − xtC = −0,007 [ms]; 95 %CI: [−0,268; 0,254] [ms]) está al borde de ser significativamente distinta de cero (p = 0,050).
+
 
 ## C)  Análisis robusto de una vía para muestras correlacionadas usando bootstrapping.
 
@@ -354,6 +420,12 @@ if( mr_bt [["test"]] > mr_bt [["crit"]]) {
 }
 ```
 
+El procedimiento post-hoc con bootstrapping, sin embargo, entrega una visión distinta a la obtenida con
+el equivalente asintótico. Vemos que se establece un valor crítico t∗boot = 4,991 considerando las repeticiones
+bootstrap, el que solo es superado por la media recortada de las diferencias entre los algoritmos 
+A y C :(xtA − xtC)boot = −0,813 [ms]; 95 %CI: [−1,422; −0,205] [ms]; tboot = 6,670).
+
+# ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
 # 1) Bootstrapping para una muestra
@@ -496,6 +568,17 @@ p <- ( sum ( distribucion_nula < diferencia_obs ) + 1) / ( B + 1)
 cat ("\ nValor p:", p , "\n")
 
 ```
+
+Tras aplicar pruebas de Shapiro-Wilk, los investigadores han comprobado que las notas de los varones no
+siguen una distribución normal (W = 0,884, p = 0,006), por lo que han decidido usar bootstrapping para la
+prueba de hipótesis, con un nivel de significación α = 0,05 y B = 9.999 repeticiones.
+
+Se muestra el desarrollo de este ejemplo en R. La media observada (en la muestra original) para
+la calificación final de las mujeres es xm = 5,305, mientras que para los hombres es xh = 3,670. Así, la
+diferencia observada es xh − xm = −1,635.
+
+La distribución bootstrap de la diferencia de medias se asemeja a la normal (figura 12.17), con media 
+x = −1,628 y desviación estándar s = 0,377.
 
 ```{r}
 
