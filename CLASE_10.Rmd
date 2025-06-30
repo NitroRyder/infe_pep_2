@@ -56,6 +56,23 @@ g <- ggarrange ( g1 , g2 , labels = c("Modelo" , "Predicciones") , hjust = c( -1
 print ( g )
 ```
 
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p de todos los predictores seleccionados son menores a 0.05, lo que indica que son 
+  predictores significativos al presentar valores p de < 2e-16.
+  
+-----------------------------------------------------------------------------------
+RESIDUOS:
+- Los residuos indican cierta asimetría positiva (el valor máximo es bastante más alto que el mínimo: 147.845 vs. -62.382), lo que sugiere que puede haber algunos outliers positivos.
+
+- El mediana cercana a 0 es buena (1.62), sugiere que no hay sesgo importante en los errores.
+
+-----------------------------------------------------------------------------------
+RESUMEN DEL MODELO:
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+
+-----------------------------------------------------------------------------------
+
 ## B) Regresión lineal simple con un predictor dicotómico:
 
 ```{r}
@@ -96,6 +113,33 @@ g <- ggarrange ( g1 , g2 , labels = c("Modelo" , "Residuos") , hjust = c( -1.4 ,
 print ( g )
 ```
 
+-----------------------------------------------------------------------------------
+AJUSTE:
+- R² (Multiple R-squared) = 0.4144: el modelo explica el 41.4% de la variabilidad del hm 
+
+Este valor indica un ajuste bajo, lo que sugiere que hay otros factores que también influyen en hp y no están siendo considerados en el modelo.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p de todos los predictores seleccionados son menores a 0.05, lo que indica que son 
+  predictores significativos al presentar valores p de 0.000517.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de 0.0005168
+  
+-----------------------------------------------------------------------------------
+RESIDUOS:
+- Los residuos indican cierta asimetría positiva (el valor máximo es bastante más alto que el mínimo: 150.667 vs. -93.333), lo que sugiere que puede haber algunos outliers positivos.
+
+-----------------------------------------------------------------------------------
+RESUMEN DEL MODELO:
+
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+- Sin embargo, la capacidad explicativa del modelo es limitada (R² = 41.4%).
+
+-----------------------------------------------------------------------------------
+
 
 ## C) Evaluación del modelo de regresión lineal simple usado como ejemplo.
 
@@ -125,8 +169,16 @@ residualPlots ( modelo , type = "rstandard" ,
                 col = "steelblue" , pch = 20 , col.quad = "red")
 ```
 
+Grafico de reciduos:
+Si bien es posible observar que presenta una curvatura, el test de curvatura de Tukey no es significativo, pues 
+presenta un valor de 0.7054, uno mayor a 0.05, lo que refuerza la conclusión de que la relación entre los predictores seleccionados y hp puede ser considerada lineal para fines del modelo.
+
+Cumpliendo con la condición de los residuos.
 
 ### 3) PRUEBA DE INDEPENDENCIA DE LOS RESIDUOS:
+
+H0: Los residuos son independientes.
+H1: Los residuos no son independientes.
 
 ```{r}
 # Verificar independencia de los residuos
@@ -136,6 +188,7 @@ cat ("\nPrueba de independencia:\n" )
 print ( db )
 ```
 
+Como el valor p es mayor a 0.05, no se rechaza H0. Por lo tanto, los residuos son independientes.
 
 ### 4) DESPLEGAR GRÁFICOS MARGINALES:
 
@@ -146,8 +199,20 @@ marginalModelPlots ( modelo , sd = TRUE ,
                      col = "steelblue" , pch = 20 , col.line = c("steelblue" , "red") )
 ```
 
+Grafico marginales:
+La relación es lineal, con un ajuste preciso y sin patrones de curvatura. Por tanto, el supuesto de linealidad está bien cumplido
+
+Cumpliendio con la condición de linealidad de los predictores con la variable de respuesta.
+
+DETALLE:
+En las figuras se puede observar algunas desviaciones entre las observaciones y las predicciones, en una
+región donde solo aparecen valores por debajo de la línea de regresión. Por otro lado, las estimaciones de las
+desviaciones estándar sugieren que la variabilidad va aumentando con el valor de la variable predictora.
 
 ### 5) PRUEBA DE HOMOCEDASTICIDAD:
+
+H0: La varianza de los residuos es constante (homocedasticidad).
+H1: La varianza de los residuos no es constante (heterocedasticidad).
 
 ```{r}
 # Prueba de la varianza del error no constante .
@@ -155,6 +220,7 @@ cat ("\nPrueba de homocedasticidad:\n" )
 print ( ncvTest ( modelo ) )
 ```
 
+Como el valor p es menor a 0.05, se rechaza H0. No cumpliendo con la condición de homocedasticidad.
 
 ### 6) DESPLEGAR GRÁFICOS DE INFLUENCIA:
 
@@ -164,6 +230,17 @@ casos_influyentes <- influencePlot ( modelo , id = list ( cex = 0.7) )
 #cat ("\nCasos que podrían ser influyentes:\n" )
 print ( casos_influyentes )
 ```
+
+Es posible observar que si bien los puntos Fiat 128, Pontiac Firebird, Ferrari Dino y Maserati Bora destacan por
+sobre el resto, donde las observación Maserati Bora presenta residuos(StudRes) mayor a 2 lo cual las 
+clasifica como potencialmente atípica, pero ninguna de las observaciones 
+supera el umbral crítico en la distancia de Cook, siendo todos estos menores 
+a 1, por ende no se consideran altamente influyentes ni comprometen 
+significativamente la validez del modelo.
+
+### 7) RESULTADO CONFIAVILIDAD:
+
+NO SE CUMPLE CON LA CONDICIÓN DE HOMOCEDASTICIDAD, por lo que no se puede confiar en los resultados del modelo.
 
 ## D) RLS:
 
@@ -202,6 +279,40 @@ rmse_prueba <- sqrt ( mean ( error ** 2) )
 cat ("MSE para el conjunto de prueba:" , rmse_prueba )
 ```
 
+-----------------------------------------------------------------------------------
+AJUSTE:
+- R² (Multiple R-squared) = 0.3825: el modelo explica el 38.3% de la variabilidad del hp. 
+
+Este valor indica un ajuste bajo, lo que sugiere que hay otros factores que también influyen en hp y no están siendo considerados en el modelo.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p del predictor disp es menor a 0.05, lo que indica que es un 
+  predictor significativo al presentar un valor p de 0.00365.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de 0.003653
+
+-----------------------------------------------------------------------------------
+ERROR CUADRÁTICO MEDIO (MSE):
+- MSE para el conjunto de entrenamiento: 45.29314 
+- MSE para el conjunto de prueba: 45.2879
+
+Como son similares, podemos concluir que el modelo no está sobreajustado.
+
+-----------------------------------------------------------------------------------
+RESIDUOS:
+- Los residuos indican cierta asimetría positiva (el valor máximo es bastante más alto que el mínimo: 161.66 vs. -48.96), lo que sugiere que puede haber algunos outliers positivos.
+
+-----------------------------------------------------------------------------------
+
+CONCLUSIÓN MODELO:
+
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+- Sin embargo, la capacidad explicativa del modelo es limitada (R² = 38%).
+
+
 ### 2) RLS usando validación cruzada de K pliegues.
 
 ```{r}
@@ -229,6 +340,38 @@ print ( entrenamiento [[ "resample" ]])
 cat ("\nError estimado para el modelo:\n" )
 print ( entrenamiento [[ "results" ]])
 ```
+
+-----------------------------------------------------------------------------------
+ERRORES ESTIMADO PARA EL MODELO:
+- RMSE = 47.53: el error cuadrático medio indica, en promedio, cuánto difieren las predicciones del valor real del hp.
+
+- MAE = 32.28: el error absoluto medio representa la desviación promedio sin considerar el signo de los errores.
+
+-----------------------------------------------------------------------------------
+AJUSTE:
+- R² (Multiple R-squared) = 0.5534: el modelo explica el 55.3% de la variabilidad del hp. 
+
+Hay un ajuste Moderado para el modelo.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p del predictor disp es menor a 0.05, lo que indica que es un 
+  predictor significativo al presentar un valor p de 2.02e-05.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de 2.02e-05
+
+-----------------------------------------------------------------------------------
+RESIDUOS:
+- Los residuos indican cierta asimetría positiva (el valor máximo es bastante más alto que el mínimo: 147.845 vs. -62.382), lo que sugiere que puede haber algunos outliers positivos.
+
+-----------------------------------------------------------------------------------
+CONCLUSIÓN MODELO:
+
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+- Sin embargo, la capacidad explicativa del modelo es moderada (R² = 55.3%) y errores razonables, sin evidencia de sobreajuste.
+
 ### 3) RLS usando validación cruzada dejando uno fuera.
 
 ```{r}
@@ -256,6 +399,37 @@ print ( entrenamiento [[ "pred" ]])
 cat ("\nError estimado para el modelo:\n" )
 print ( entrenamiento [[ "results" ]])
 ```
+
+-----------------------------------------------------------------------------------
+ERRORES ESTIMADO PARA EL MODELO:
+- RMSE = 47.53: el error cuadrático medio indica, en promedio, cuánto difieren las predicciones del valor real del hp.
+
+- MAE = 32.28: el error absoluto medio representa la desviación promedio sin considerar el signo de los errores.
+
+-----------------------------------------------------------------------------------
+AJUSTE:
+- R² (Multiple R-squared) = 0.5534: el modelo explica el 55.3% de la variabilidad del hp. 
+
+Hay un ajuste Moderado para el modelo.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+- El valor p del predictor disp es menor a 0.05, lo que indica que es un 
+  predictor significativo al presentar un valor p de 2.02e-05.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de 2.02e-05
+
+-----------------------------------------------------------------------------------
+RESIDUOS:
+- Los residuos indican cierta asimetría positiva (el valor máximo es bastante más alto que el mínimo: 147.845 vs. -62.382), lo que sugiere que puede haber algunos outliers positivos.
+
+-----------------------------------------------------------------------------------
+CONCLUSIÓN MODELO:
+
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+- Sin embargo, la capacidad explicativa del modelo es moderada (R² = 55.3%) y errores razonables, sin evidencia de sobreajuste.
 
 ### --------------------
 ### EXTRA:

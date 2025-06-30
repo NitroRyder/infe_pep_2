@@ -36,6 +36,17 @@ cat (" --- \n")
 print (anova (modelo, test = "LRT"), signif.stars = FALSE)
 ```
 
+- El peso del vehículo (wt ) aporta significativamente al modelo (z = 2,191; p = 0,029) si consideramos un       nivel de significación 0,05.
+
+- La desviación para este modelo con un predictor (15 grados de libertad) se redujo
+  a 9,966 del valor 23,035 exhibido por el modelo nulo, y que su valor para el criterio de información de
+  Akaike es AIC = 13,966. 
+
+- En la segunda parte, vemos que la reducción en la desviación conseguida (13,069)
+  es significativa (x2(15) = 13,069; p < 0,001). 
+  
+Podemos concluir, entonces, que el modelo con un predictor presenta un mejor ajuste que el modelo nulo.
+
 ## B) Evaluación del modelo de RLog en los datos de entrenamiento.
 
 ```{r}
@@ -295,17 +306,32 @@ residualPlots(modelo2, terms = ~ mpg + wt,
                col = "steelblue", pch = 19, col.quad = "red", fitted = FALSE)
 ```
 
+Dado los resultados de los residualPlots, se puede confirmar que se
+cumple el supuesto de linealidad entre los predictores y la respuesta
+obtenida. Pues todo valor p obtenido es mayor a 0.05, lo que indica que
+no hay evidencia suficiente para rechazar la hipótesis nula de
+linealidad.
+
 ### 2) Los residuos deben ser independientes entre sí.
+
+H0: Los residuos son independientes.
+H1: Los residuos no son independientes.
 
 ```{r}
 durbinWatsonTest(modelo2)
 ```
+
+Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendo con la condición de independencia de los residuos.
 
 ### 3) Multicolinealidad entre los predictores, que en este caso se evalúa y aborda del mismo modo que para RLM.
 
 ```{r}
 vif(modelo2)
 ```
+
+Todas las variables muestran valor de inflación de la varianza por
+debajo de 5, lo que indica que no hay problemas de multicolinealidad
+severos en el modelo.
 
 ### 4) Información incompleta, que se produce cuando no contamos con observaciones suficientes para todas las posibles combinaciones de predictores, en especial para algún nivel de una variable categórica.
 
@@ -325,9 +351,11 @@ datos_ent |> group_by(am) |>
             wt_unique = n_distinct(wt))
 ```
 
+Se cumple, pues contamos con mas de 10 o 15 observaciones y no esxiste ninguna que presente valores N/A.
+
 ### 5) Separación perfecta, que ocurre cuando no hay superposición entre las clases
 
-#### OJO: RESPUESTA ANALIZANDO LOS GRAFICOS DE RECIDUOS!!
+Existe curvatura, pero no penaliza la condición.
 
 ### 6) Las estimaciones de los coeficientes del modelo no están dominadas por casos influyentes.
 
@@ -338,3 +366,11 @@ casos_influyentes <- influencePlot (modelo2 , id = list ( cex = 0.7) )
 print ( casos_influyentes )
 ```
 
+Es posible observar que si bien los puntos AMC Javelin, Mazda RX4 Wag y Maserati Bora destacan por
+sobre el resto, donde las observación Maserati Bora presenta residuos(StudRes) menor a -2 lo cual las 
+clasifica como potencialmente atípica, hay dos observaciones 
+cerca del umbral crítico en la distancia de Cook, pero no lo sobrepasan, siendo estos AMC Javelin y Maserati Bora, por ende no se consideran altamente influyentes y no comprometen significativamente la validez del modelo.
+
+## 7) RESULTADO CONFIAVILIDAD:
+
+SE CUMPLE TODA CONDICIÓN.

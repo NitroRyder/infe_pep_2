@@ -204,11 +204,13 @@ cat ("MSE para el conjunto de prueba:       " , rmse_prueba )
 ```
 
 ## a) Resultado del modelo:
+
 -----------------------------------------------------------------------------------
 #### AJUSTE:
 - R² (Multiple R-squared) = 0.7943: el modelo explica el 79.4% de la variabilidad del peso. 
 
 Hay un ajuste bueno para el modelo (lo que es bueno).
+
 -----------------------------------------------------------------------------------
 #### SIGNIFICANCIA DEL COEFICIENTE:
 - El valor p del predictor Hip.Girth es menor a 0.05, lo que indica que es un 
@@ -224,11 +226,13 @@ Hay un ajuste bueno para el modelo (lo que es bueno).
 - MSE para el conjunto de prueba:        4.259928 
 
 Como son similares, podemos concluir que el modelo no está sobreajustado.
+
 -----------------------------------------------------------------------------------
 ## b) CONCLUCIÓN MODELO:
 
 EL MODELO TIENE ALTA CALIDAD, CUMPLE CON LOS CRITERIOS DE AJUSTE, SIGNIFICANCIA 
 DEL COEFICIENTE Y SIGNIFICANCA DEL MODELO.
+
 ##-----------------------------------------------------------------------------------
 
 ## D) ESTUDIO DE CONFIAVILIDAD DE modelo_rls_1:
@@ -420,19 +424,21 @@ cat("BIC: ", BIC(modelo_seleccionado), "\n")
 ```
 
 ## a) Resultado del modelo:
+
 -----------------------------------------------------------------------------------
 #### AJUSTE:
 - R² (Multiple R-squared) = 0.8714: el modelo explica el 87.1% de la variabilidad del peso. 
 
 Hay un ajuste bueno para el modelo (lo que es bueno).
+
 -----------------------------------------------------------------------------------
 #### SIGNIFICANCIA DEL COEFICIENTE:
 - El valor p de todos los predictores seleccionados son menores a 0.05, lo que indica que son 
-  predictores significativos al presentar valores p de < 2e-16.
+  predictores significativos.
 
 -----------------------------------------------------------------------------------
 #### SIGNIFICANCA DEL MODELO:
-- F-static presenta un p-value de < 2.2e-16
+- F-static presenta un p-value de < 2.2e-16.
 
 -----------------------------------------------------------------------------------
 #### BONDAD DE AJUSTE DEL MODELO SELECCIONADO AIC Y BIC:
@@ -506,7 +512,7 @@ Grafico de reciduos:
 Si bien es posible observar que presenta una curvatura, el test de curvatura de Tukey no es significativo, pues 
 presenta un valor de 0.933, uno mayor a 0.05, lo que refuerza la conclusión de que la relación entre los predictores seleccionados y Weight puede ser considerada lineal para fines del modelo.
 
-Cumplienfo con la condición de normalidad de los residuos.
+Cumpliendo con la condición de normalidad de los residuos.
 
 #### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
 
@@ -517,7 +523,7 @@ H1: La varianza de los residuos no es constante (heterocedasticidad).
 ncvTest(modelo_seleccionado)
 ```
 
-Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendio con la condición de homocedasticidad.
+Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendo con la condición de homocedasticidad.
 
 #### 7. Los residuos deben ser independientes entre sí.
 

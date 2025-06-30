@@ -22,6 +22,29 @@ modelo <- lm(hp ~ disp + wt, data = datos)
 print (summary (modelo) )
 ```
 
+-----------------------------------------------------------------------------------
+AJUSTE:
+- R² (Multiple R-squared) = 0.5537: el modelo explica el 55.3% de la variabilidad del hp. 
+
+Hay un ajuste Moderado para el modelo.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+
+- El predictor disp es estadísticamente significativo, ya que su valor p es 0.00293 (< 0.05).
+
+- En cambio, el predictor wt no es significativo, con un valor p de 0.91452 (> 0.05), lo que sugiere que no aporta evidencia estadística de relación con la variable respuesta cuando disp ya está incluido en el modelo.  
+  
+-----------------------------------------------------------------------------------
+SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de 0.00014
+
+-----------------------------------------------------------------------------------
+CONCLUSIÓN MODELO:
+
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+- Sin embargo, la capacidad explicativa del modelo es moderada (R² = 55.3%) y errores razonables, sin evidencia de sobreajuste.
+
 ### a) Gráfico 3D del plano de regresión obtenido para el ejemplo.
 
 ```{r}
@@ -176,8 +199,36 @@ print (anova (modelo_4, modelo_6), signif.legend = FALSE)
 # Mostrar el modelo obtenido
 cat("\n\nModelo obtenido con regresión jerárquica:\n")
 cat ("---------------------------------------\n")
-print (summary (modelo_4), signif.legend = FALSE)
+print (summary(modelo_4), signif.legend = FALSE)
 ```
+
+-----------------------------------------------------------------------------------
+AJUSTE:
+- R² (Multiple R-squared) = 0.9711: el modelo explica el 97.1% de la variabilidad del hp. 
+
+Hay un ajuste Alto para el modelo.
+
+-----------------------------------------------------------------------------------
+SIGNIFICANCIA DEL COEFICIENTE:
+
+- El predictor disp es estadísticamente significativo, ya que su valor p es 0.000734 (< 0.05).
+
+- El predictor carb posee variables significativas y no significativas, lo que sugiere que no todas sus versiones no aportan evidencia estadística de relación con la variable respuesta cuando disp ya está incluido en el modelo. 
+
+- El predictor cyl posee variables significativas y no significativas, lo que sugiere que no todas sus versiones no aportan evidencia estadística de relación con la variable respuesta cuando disp ya está incluido en el modelo. 
+-----------------------------------------------------------------------------------
+SIGNIFICANCA DEL MODELO:
+- F-static presenta un p-value de 7.366e-11
+
+-----------------------------------------------------------------------------------
+RESIDUOS:
+- Los residuos indican cierta asimetría positiva (el valor máximo es bastante más alto que el mínimo: 28.81 vs. -30.422), lo que sugiere que puede haber algunos outliers positivos.
+
+-----------------------------------------------------------------------------------
+CONCLUSIÓN MODELO:
+
+- El modelo es estadísticamente significativo, y su predictor principal también lo es.
+- La capacidad explicativa del modelo es alta (R² = 97.1%).
 
 ## B) REGRESIÓN PASO A PASO:
 
@@ -331,6 +382,12 @@ cat ("----------------------------------------------------------------\n")
 print(modelo_mejor_r2a)
 ```
 
+```{r}
+modelo_exhaustivo <- lm (hp ~ mpg + cyl + disp + drat + qsec + vs + am + gear, data = datos)
+summary (modelo_exhaustivo)
+```
+
+
 # 5) CONFIAVILIDAD DE UN MODELO RLM (LOS 9 PASOS) -> USANDO 
 
 ```{r}
@@ -345,10 +402,15 @@ library (ggpubr)
 library(leaps)
 library(car)
 # Cargar y filtrar los datos
+
+# "mpg" + "disp" + "drat" + "qsec"
+
+# mpg + disp +drat + qsec
+
 datos <- mtcars |> filter (wt > 2 & wt < 5) |>
   mutate_at (c("cyl", "vs", "am", "gear", "carb") , as.factor)
 
-modelo_prueba <- lm (hp ~ cyl + vs + am + gear + carb, data = datos)
+modelo_prueba <- lm (hp ~ mpg + disp +drat + qsec, data = datos)
 ```
 
 ### 1. La variable de respuesta debe ser cuantitativa y continua, sin restricciones para su variabilidad.
@@ -357,52 +419,90 @@ modelo_prueba <- lm (hp ~ cyl + vs + am + gear + carb, data = datos)
 str(datos$hp)
 ```
 
+Se cumple con este punto, ya que la variable de respuesta es
+cuantitativa y continua.
+
+Por ende, se cumple con esta condición.
+
 ### 2. Los predictores deben ser cuantitativos o dicotómicos (de ahí la necesidad de variables indicadoras para manejar más de dos niveles).
 
 ```{r}
-str(datos[, c("cyl", "vs", "am", "gear", "carb")])
+str(datos[, c("mpg" , "disp" , "drat" , "qsec")])
 ```
+
+Se cumple este punto, ya que los predictores son cuantitativos y no hay
+variables dicotómicas.
+
+Por ende, se cumple con esta condición.
 
 ### 3. Los predictores deben tener algún grado de variabilidad (su varianza no debe ser igual a cero). En otras palabras, no pueden ser constantes.
 
 ```{r}
-apply(datos[, c("cyl", "vs", "am", "gear", "carb")], 2, var)
+apply(datos[, c("mpg" , "disp" , "drat" , "qsec")], 2, var)
 ```
 
-### 4. Cada predictor debe estar relacionado linealmente con la respuesta.
+Como es posible observar, la varianza de cada caso son mayores que 0.
+
+Por ende, se cumple con esta condición.
 
 ```{r}
 # GRAFICO DE RECIDUOS:
-residualPlots(modelo_prueba, terms = ~ cyl + vs + am + gear + carb,
+residualPlots(modelo_prueba, terms = ~ mpg + disp +drat + qsec,
               id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
               col = "steelblue", pch = 19, col.quad = "red")
 
 # GRAFICO MARGINALES:
-marginalModelPlots(modelo_prueba, sd = TRUE, terms = ~ cyl + vs + am + gear + carb,
+marginalModelPlots(modelo_prueba, sd = TRUE, terms = ~ mpg + disp +drat + qsec,
                    id = list(method = "r", n = 3, cex = 0.7, location = "lr"),
                    col = "steelblue", pch = 20, col.line = c("blue", "red"))
 ```
 
-### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
+### 4. Cada predictor debe estar relacionado linealmente con la respuesta.
 
+Grafico marginales:
+La relación es lineal, con un ajuste preciso y sin patrones de curvatura. Por tanto, el supuesto de linealidad está bien cumplido
+
+Cumpliendo con la condición de linealidad de los predictores con la variable de respuesta.
+
+#### 5. La distribución de los residuos debe ser cercana a la normal centrada en cero.
+
+Grafico de reciduos:
+Si bien es posible observar que presenta una curvatura, el test de curvatura de Tukey no es significativo, pues 
+presenta un valor de 0.001647, menor a 0.05. Esto indica evidencia de que la relación no es perfectamente lineal: es decir, hay curvatura en los residuos.
+
+Por tanto, no se cumple plenamente el supuesto de linealidad en este caso, aunque visualmente pueda parecer aceptable.
 
 ### 6. La variabilidad de los residuos debe ser aproximadamente constante (homocedasticidad).
+
+H0: La varianza de los residuos es constante (homocedasticidad).
+H1: La varianza de los residuos no es constante (heterocedasticidad).
 
 ```{r}
 ncvTest(modelo_prueba)
 ```
 
+Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendo con la condición de homocedasticidad.
+
 ### 7. Los residuos deben ser independientes entre sí.
+
+H0: Los residuos son independientes.
+H1: Los residuos no son independientes.
 
 ```{r}
 durbinWatsonTest(modelo_prueba)
 ```
+
+Como el valor p es mayor a 0.05, no se rechaza H0. Cumpliendo con la condición de independencia de los residuos.
 
 ### 8. No debe existir multicolinealidad. Esto significa que no deben darse relaciones lineales fuertes (co-eficientes de correlación altos) entre dos o más predictores.
 
 ```{r}
 vif(modelo_prueba)
 ```
+
+Todas las variables muestran valor de inflación de la varianza por
+debajo de 5, lo que indica que no hay problemas de multicolinealidad
+severos en el modelo.
 
 ### 9. Las estimaciones de los coeficientes del modelo no debe estar alterados por unos pocas observaciones
 influyentes.
@@ -413,6 +513,17 @@ casos_influyentes <- influencePlot ( modelo_prueba , id = list ( cex = 0.7) )
 #cat ("\nCasos que podrían ser influyentes:\n" )
 print ( casos_influyentes )
 ```
+
+Es posible observar que si bien los puntos Merc 230, Fiat 128 y Maserati Bora destacan por
+sobre el resto, donde las observación Maserati Bora presenta residuos(StudRes) mayor a 2 lo cual las 
+clasifica como potencialmente atípica, pero ninguna de las observaciones 
+supera el umbral crítico en la distancia de Cook, siendo todos estos menores 
+a 1, por ende no se consideran altamente influyentes ni comprometen 
+significativamente la validez del modelo.
+
+##10. RESULTADO CONFIAVILIDAD:
+
+NO SE CUMPLE CON LA CONDICIÓN DE Cada predictor debe estar relacionado linealmente con la respuesta, por lo que no se puede confiar en los resultados del modelo.
 
 # 6) CALIDAD PREDICTIVA DE UN MODELO RLM
 
@@ -480,5 +591,13 @@ print (entrenamiento [["results"]])
 options (warn = opt [[1]] )
 ```
 
+MODELO validación cruzada dejando uno fuera
+-----------------------------------------------------------------------------------
+ERRORES ESTIMADO PARA EL MODELO:
+- RMSE = 58.22: el error cuadrático medio indica, en promedio, cuánto difieren las predicciones del valor real del hp.
 
+- Rsquared = 0.488: el coeficiente de determinación indica que el modelo explica el 55.3% de la variabilidad del hp.
 
+- MAE = 30.48: el error absoluto medio representa la desviación promedio sin considerar el signo de los errores.
+
+-----------------------------------------------------------------------------------
