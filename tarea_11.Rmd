@@ -42,6 +42,7 @@ mitad_no_sobrepeso <- datos_categorizados |> filter(ICM < 23.2) |> sample_n(50)
 muestra <- rbind(mitad_sobrepeso, mitad_no_sobrepeso)
 ```
 
+# ----------------------------------------------------------------------------------------------------------------------------
 # 3) Usando las herramientas del paquete leaps, realizar una búsqueda exhaustiva para seleccionar entre dos y ocho predictores que ayuden a estimar la variable Peso (Weight), obviamente sin considerar las nuevas variables IMC ni EN, y luego utilizar las funciones del paquete caret para construir un modelo de regresión lineal múltiple con los predictores escogidos y evaluarlo usando bootstrapping.
 
 ## A) Seleccionar las variables a usar 
@@ -126,6 +127,7 @@ print(modelo_final)
 - Calf.Maximum.Girth
 - Height
 
+# ----------------------------------------------------------------------------------------------------------------------------
 # 4) Haciendo un poco de investigación sobre el paquete caret, en particular cómo hacer Recursive Feature Elimination (RFE), construir un modelo de regresión lineal múltiple para predecir la variable IMC que incluya entre 10 y 20 predictores, seleccionando el conjunto de variables que maximice R2 y que use cinco repeticiones de validación cruzada de cinco pliegues para evitar el sobreajuste (obviamente no se debe considerar las variables Peso, Estatura ni estado nutricional –Weight, Height, EN respectivamente).
 
 ## A) Seleccionar las variables a usar 
@@ -153,18 +155,18 @@ control <- rfeControl(functions = lmFuncs,       # funciones para RLM
                       repeats = 5,               # 5 repeticiones
                       verbose = FALSE)
 
-modelo_rfe <- rfe(x,
-                  datos_a_usar2$ICM,
-                  sizes = 10:20,
-                  rfeControl = control)
+modelo_rfe <- rfe(x,                    # DATOS A USAR SIN VARIABLE A PREDECIR
+                  datos_a_usar2$ICM,    # VARIABLE A PREDECIR
+                  sizes = 10:20,        # RANGO DE PREDICTORES A BUSCAR
+                  rfeControl = control) # CONTROL DE RFE
 #-------------------------------------------------------------------------------
 # Mostrar resumen del modelo
 print(modelo_rfe)
-
+cat("\n-------------------------------------\n")
 # Predictores seleccionados
 cat("\nPredictores seleccionados:\n")
 print(predictors(modelo_rfe))
-
+cat("\n-------------------------------------\n")
 # Gráfico de rendimiento por número de predictores
 plot(modelo_rfe, type = c("g", "o"))
 #-------------------------------------------------------------------------------
@@ -191,7 +193,7 @@ summary(modelo_final2)
 - Wrists.diameter
 - Ankle.Minimum.Girth
 
-
+# ----------------------------------------------------------------------------------------------------------------------------
 # 5) Usando RFE, construir un modelo de regresión logística múltiple para la variable EN que incluya el conjunto de predictores, entre dos y seis, que entregue la mejor curva ROC y que utilice validación cruzada dejando uno fuera para evitar el sobreajuste (obviamente no se debe considerar las variables Peso, Estatura –Weight y Height respectivamente– ni IMC).
 
 ## A) Seleccionar las variables a usar 
@@ -206,6 +208,34 @@ datos_a_usar3 <- datos_a_usar3[sample(nrow(datos_a_usar3)), ]
 ```
 
 ## B) Realizar RFE para seleccionar los mejores predictores
+
+```{r}
+
+# Asegurar EN esté codificada correctamente
+#datos_a_usar3$EN <- factor(datos_a_usar3$EN, levels = c("no sobrepeso", "sobrepeso"))
+
+# Separar predictores
+#x2 <- datos_a_usar3 |> dplyr::select(-EN)
+
+# Funciones para RFE con ROC
+#logitFuncs <- caretFuncs
+#logitFuncs$summary <- twoClassSummary
+#logitFuncs$fit <- function(x, y, first, last, ...) { glm(y ~ ., data = data.frame(y = y, x), family = binomial)}
+
+#control2 <- rfeControl(functions = logitFuncs, method = "LOOCV", verbose = FALSE)
+
+# Ejecutar RFE
+#modelo_rfe2 <- rfe(x2, y = datos_a_usar3$EN, sizes = 2:6, rfeControl = control2, metric = "ROC")
+
+# Mostrar predictores seleccionados
+#cat("\nPredictores seleccionados:\n")
+#print(predictors(modelo_rfe2))
+
+# Ver desempeño
+#plot(modelo_rfe2, type = c("g", "o"))
+
+```
+
 
 ```{r}
 x2 <- datos_a_usar3 |> select(-EN)  # Excluir la variable objetivo EN
@@ -279,6 +309,7 @@ cat(sprintf("Especificidad: %.3f\n", mat_conf_pru[["byClass"]]["Specificity"]))
 - Hip. Girth
 - Calf.Maximum.Girth
 
+# ----------------------------------------------------------------------------------------------------------------------------
 # 6) Pronunciarse sobre la confiabilidad y el poder predictivo de los modelos obtenidos.
 
 ## A) MODELO DE REGRESIÓN LINEAL MÚLTIPLE PARA Weight (SE USA MODELO modelo_mejor_bic)
@@ -459,7 +490,7 @@ durbinWatsonTest(modelo_final33)
 vif(modelo_final33)
 ```
 
-### 4) Información incompleta, que se produce cuando no contamos con observaciones suficientes para todas las posibles combinaciones de predictores, en especial para algún nivel de una variable categórica.
+### 4. Información incompleta, que se produce cuando no contamos con observaciones suficientes para todas las posibles combinaciones de predictores, en especial para algún nivel de una variable categórica.
 
 ```{r}
 # CANTIDAD DE OBSERVACIONES EN EL MODELO
@@ -479,11 +510,11 @@ datos_a_usar3 |> group_by(EN) |>
             Calf_Maximum_Girth_unique = n_distinct(Calf.Maximum.Girth))
 ```
 
-### 5) Separación perfecta, que ocurre cuando no hay superposición entre las clases
+### 5. Separación perfecta, que ocurre cuando no hay superposición entre las clases
 
 #### OJO: RESPUESTA ANALIZANDO LOS GRAFICOS DE RECIDUOS!!
 
-### 6) Las estimaciones de los coeficientes del modelo no están dominadas por casos influyentes.
+### 6. Las estimaciones de los coeficientes del modelo no están dominadas por casos influyentes.
 
 ```{r}
 # Desplegar gr á ficos de influencia .

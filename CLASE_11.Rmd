@@ -383,8 +383,7 @@ print(modelo_mejor_r2a)
 ```
 
 ```{r}
-modelo_exhaustivo <- lm (hp ~ mpg + cyl + disp + drat + qsec + vs + am + gear, data = datos)
-summary (modelo_exhaustivo)
+summary (modelo_mejor_bic)
 ```
 
 
